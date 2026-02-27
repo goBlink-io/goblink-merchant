@@ -1,36 +1,49 @@
 import { NextRequest } from "next/server";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
+import { checkRateLimit, withRateLimitHeaders } from "@/lib/rate-limit";
+import { withCors, handleCorsOptions } from "@/lib/cors";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// OPTIONS — CORS preflight
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsOptions(request);
+}
+
 // GET /api/checkout/[id] — Public. Fetch payment + merchant info for checkout page.
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // Rate limit
+  const rl = await checkRateLimit(request, "checkout-get");
+  if (!rl.allowed) return withCors(request, rl.response!);
+
   const { id } = await params;
 
   if (!UUID_RE.test(id)) {
-    return apiError("Invalid payment ID", 400);
+    return withCors(request, apiError("Invalid payment ID", 400));
   }
 
   const supabase = getServiceClient();
 
+  // Select only the fields needed — no select("*")
   const { data: payment, error } = await supabase
     .from("payments")
-    .select("*")
+    .select(
+      "id, merchant_id, amount, currency, status, external_order_id, deposit_address, return_url, metadata, expires_at, confirmed_at, created_at, send_tx_hash, fulfillment_tx_hash, customer_wallet, customer_chain"
+    )
     .eq("id", id)
     .single();
 
   if (error || !payment) {
-    return apiError("Payment not found", 404);
+    return withCors(request, apiError("Payment not found", 404));
   }
 
   // Check if expired
   if (payment.expires_at && new Date(payment.expires_at) < new Date()) {
     if (payment.status === "pending") {
-      // Mark as expired
       await supabase
         .from("payments")
         .update({ status: "expired" })
@@ -39,14 +52,14 @@ export async function GET(
     }
   }
 
-  // Fetch merchant info
+  // Fetch merchant info — only needed fields
   const { data: merchant } = await supabase
     .from("merchants")
     .select("business_name, logo_url, brand_color, wallet_address, settlement_token, settlement_chain")
     .eq("id", payment.merchant_id)
     .single();
 
-  return apiSuccess({
+  const response = apiSuccess({
     payment: {
       id: payment.id,
       amount: payment.amount,
@@ -75,4 +88,6 @@ export async function GET(
         }
       : null,
   });
+
+  return withCors(request, withRateLimitHeaders(response, "checkout-get", rl.remaining));
 }

@@ -3,6 +3,7 @@ import { getServiceClient } from "@/lib/service-client";
 import { getExecutionStatus } from "@/lib/oneclick";
 import { dispatchWebhooks } from "@/lib/webhooks";
 import { apiError, apiSuccess } from "@/lib/api-response";
+import { logAudit } from "@/lib/audit";
 
 const FEE_RATE = 0.01; // 1%
 
@@ -89,6 +90,15 @@ export async function GET(request: NextRequest) {
           },
         });
 
+        logAudit({
+          merchantId: payment.merchant_id,
+          actor: "system",
+          action: "payment.confirmed",
+          resourceType: "payment",
+          resourceId: payment.id,
+          metadata: { feeAmount, netAmount, fulfillmentTxHash: fulfillmentTxHash ?? null },
+        });
+
         results.settled++;
       } else if (status === "FAILED") {
         const { error: updateErr } = await supabase
@@ -115,6 +125,14 @@ export async function GET(request: NextRequest) {
           },
         });
 
+        logAudit({
+          merchantId: payment.merchant_id,
+          actor: "system",
+          action: "payment.failed",
+          resourceType: "payment",
+          resourceId: payment.id,
+        });
+
         results.failed++;
       } else if (status === "REFUNDED") {
         const { error: updateErr } = await supabase
@@ -139,6 +157,14 @@ export async function GET(request: NextRequest) {
             status: "refunded",
             sendTxHash: payment.send_tx_hash,
           },
+        });
+
+        logAudit({
+          merchantId: payment.merchant_id,
+          actor: "system",
+          action: "payment.refunded",
+          resourceType: "payment",
+          resourceId: payment.id,
         });
 
         results.refunded++;

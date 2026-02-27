@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
+import { logAudit } from "@/lib/audit";
 
 // POST — Create webhook endpoint (authenticated via session)
 export async function POST(request: NextRequest) {
@@ -61,6 +62,16 @@ export async function POST(request: NextRequest) {
     return apiError(`Failed to create webhook: ${error.message}`, 500);
   }
 
+  logAudit({
+    merchantId,
+    actor: user.id,
+    action: "webhook.created",
+    resourceType: "webhook",
+    resourceId: webhook.id,
+    metadata: { url, events },
+    ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
+  });
+
   return apiSuccess(
     {
       id: webhook.id,
@@ -114,6 +125,15 @@ export async function DELETE(request: NextRequest) {
   if (error) {
     return apiError("Failed to delete webhook", 500);
   }
+
+  logAudit({
+    merchantId,
+    actor: user.id,
+    action: "webhook.deleted",
+    resourceType: "webhook",
+    resourceId: webhookId,
+    ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
+  });
 
   return apiSuccess({ deleted: true });
 }

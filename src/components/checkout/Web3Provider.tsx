@@ -28,7 +28,10 @@ import { WalletProvider as TronWalletProvider } from "@tronweb3/tronwallet-adapt
 import { WalletContextProvider } from "@/contexts/WalletContext";
 
 // --- Configuration ---
-const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "";
+const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+if (!projectId) {
+  throw new Error("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is required");
+}
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000 } },

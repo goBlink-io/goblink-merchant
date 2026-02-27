@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { validateApiKey } from "@/lib/api-auth";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
+import { logAudit } from "@/lib/audit";
 
 // POST /api/v1/webhooks — Register a webhook endpoint
 export async function POST(request: NextRequest) {
@@ -79,6 +80,16 @@ export async function POST(request: NextRequest) {
   if (error) {
     return apiError(`Failed to create webhook: ${error.message}`, 500);
   }
+
+  logAudit({
+    merchantId: auth.merchantId,
+    actor: auth.keyId,
+    action: "webhook.created",
+    resourceType: "webhook",
+    resourceId: webhook.id,
+    metadata: { url, events: selectedEvents },
+    ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
+  });
 
   return apiSuccess(
     {

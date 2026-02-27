@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { validateApiKey } from "@/lib/api-auth";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
+import { logAudit } from "@/lib/audit";
 
 // DELETE /api/v1/webhooks/:id — Remove a webhook endpoint
 export async function DELETE(
@@ -36,6 +37,15 @@ export async function DELETE(
   if (error) {
     return apiError(`Failed to delete webhook: ${error.message}`, 500);
   }
+
+  logAudit({
+    merchantId: auth.merchantId,
+    actor: auth.keyId,
+    action: "webhook.deleted",
+    resourceType: "webhook",
+    resourceId: id,
+    ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
+  });
 
   return apiSuccess({ deleted: true });
 }

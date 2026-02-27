@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
+import { logAudit } from "@/lib/audit";
 
 // POST — Create a payment link (session-authenticated)
 export async function POST(request: NextRequest) {
@@ -79,6 +80,16 @@ export async function POST(request: NextRequest) {
   if (error || !payment) {
     return apiError(`Failed to create payment link: ${error?.message}`, 500);
   }
+
+  logAudit({
+    merchantId: merchant.id,
+    actor: user.id,
+    action: "payment_link.created",
+    resourceType: "payment",
+    resourceId: payment.id,
+    metadata: { amount: Number(amount), currency: payment.currency },
+    ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
+  });
 
   return apiSuccess(
     {
