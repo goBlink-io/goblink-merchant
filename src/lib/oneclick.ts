@@ -4,8 +4,11 @@ import {
   QuoteRequest,
 } from "@defuse-protocol/one-click-sdk-typescript";
 
-// Configure 1Click SDK
-OpenAPI.BASE = process.env.ONE_CLICK_BASE_URL || "https://1click.chaindefuser.com";
+// Configure 1Click SDK — all values from environment, no hardcoded fallbacks
+if (!process.env.ONE_CLICK_BASE_URL) {
+  throw new Error("ONE_CLICK_BASE_URL environment variable is required");
+}
+OpenAPI.BASE = process.env.ONE_CLICK_BASE_URL;
 if (process.env.ONE_CLICK_JWT) {
   OpenAPI.TOKEN = process.env.ONE_CLICK_JWT.trim();
 }
