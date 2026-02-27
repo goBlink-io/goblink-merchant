@@ -499,6 +499,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   if (step === "processing") {
     return (
       <Card merchant={merchant}>
+        <JourneyStepper current="pay" />
         <AmountHeader payment={payment} />
         <div className="flex flex-col items-center text-center py-8">
           <div className="h-16 w-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
@@ -524,6 +525,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   if (step === "confirm") {
     return (
       <Card merchant={merchant}>
+        <JourneyStepper current="pay" />
         <AmountHeader payment={payment} />
 
         <div className="space-y-4 mt-6">
@@ -589,6 +591,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   // --- Select step (main checkout form) ---
   return (
     <Card merchant={merchant}>
+      <JourneyStepper current="choose" />
       <AmountHeader payment={payment} />
 
       {/* Expiry */}
@@ -771,6 +774,11 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
           </button>
         )}
 
+        {/* Auto-refund reassurance */}
+        <p className="text-xs text-zinc-500 text-center">
+          Auto-refund if transfer fails. No risk.
+        </p>
+
         {/* Connected wallet info */}
         {walletConnected && walletAddress && (
           <div className="flex items-center justify-center gap-2 text-xs text-zinc-500">
@@ -780,10 +788,10 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
         )}
       </div>
 
-      {/* Security footer */}
-      <div className="flex items-center justify-center gap-1.5 mt-6 text-xs text-zinc-600">
+      {/* Trust badge */}
+      <div className="flex items-center justify-center gap-1.5 mt-6 text-xs text-zinc-500">
         <Shield className="h-3.5 w-3.5" />
-        Non-custodial &middot; Funds go directly to merchant
+        Direct to merchant &middot; We never touch your funds
       </div>
     </Card>
   );
@@ -844,6 +852,45 @@ function AmountHeader({ payment }: { payment: PaymentData }) {
         {formatCurrency(payment.amount, payment.currency)}
       </p>
       <p className="text-sm text-zinc-400 mt-1">{payment.currency}</p>
+    </div>
+  );
+}
+
+function JourneyStepper({ current }: { current: "choose" | "pay" | "done" }) {
+  const steps = [
+    { id: "choose", label: "Choose" },
+    { id: "pay", label: "Pay" },
+    { id: "done", label: "Done ✓" },
+  ] as const;
+
+  const currentIdx = steps.findIndex((s) => s.id === current);
+
+  return (
+    <div className="flex items-center justify-center gap-2 mb-6">
+      {steps.map((s, i) => (
+        <div key={s.id} className="flex items-center gap-2">
+          <span
+            className={cn(
+              "text-xs font-medium transition-colors",
+              i < currentIdx
+                ? "text-emerald-400"
+                : i === currentIdx
+                  ? "text-blue-400"
+                  : "text-zinc-600"
+            )}
+          >
+            {s.label}
+          </span>
+          {i < steps.length - 1 && (
+            <ArrowRight
+              className={cn(
+                "h-3 w-3",
+                i < currentIdx ? "text-emerald-400" : "text-zinc-700"
+              )}
+            />
+          )}
+        </div>
+      ))}
     </div>
   );
 }
