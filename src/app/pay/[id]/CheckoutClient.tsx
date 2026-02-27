@@ -113,6 +113,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
 
   // Chain & token selection
   const [selectedChain, setSelectedChain] = useState<SupportedChain>(SUPPORTED_CHAINS[4]); // Default Ethereum
+  const [chainAutoDetected, setChainAutoDetected] = useState(false);
   const [chainDropdownOpen, setChainDropdownOpen] = useState(false);
   const [tokens, setTokens] = useState<Token[]>([]);
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
@@ -132,6 +133,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
 
   // Polling
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [fundsDetected, setFundsDetected] = useState(false);
 
   // Wallet
   const {
@@ -142,6 +144,19 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
 
   const walletConnected = isChainConnected(selectedChain.type);
   const walletAddress = getAddressForChain(selectedChain.type);
+
+  // --- Auto-detect chain from connected wallet ---
+  useEffect(() => {
+    if (chainAutoDetected) return;
+    for (const chain of SUPPORTED_CHAINS) {
+      if (isChainConnected(chain.type)) {
+        setSelectedChain(chain);
+        setChainAutoDetected(true);
+        setSelectedToken(null);
+        break;
+      }
+    }
+  }, [chainAutoDetected, isChainConnected]);
 
   // --- Fetch tokens ---
   useEffect(() => {
@@ -350,6 +365,11 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
           customerChain: data.customerChain ?? prev.customerChain,
         }));
 
+        // Detect intermediate progress — funds received by 1Click
+        if (data.sendTxHash && data.sendTxHash !== "pending" && data.sendTxHash !== "user-submitted") {
+          setFundsDetected(true);
+        }
+
         if (data.status === "confirmed") {
           setStep("success");
           if (pollRef.current) clearInterval(pollRef.current);
@@ -505,15 +525,20 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
           <div className="h-16 w-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
             <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
           </div>
-          <h2 className="text-lg font-semibold text-zinc-100 mb-2">Processing Payment</h2>
+          <h2 className="text-lg font-semibold text-zinc-100 mb-2">
+            {fundsDetected ? "Funds detected!" : "Processing Payment"}
+          </h2>
           <p className="text-sm text-zinc-400 mb-6">
-            Your transaction is being processed. This usually takes 1-3 minutes.
+            {fundsDetected
+              ? "Your funds are being swapped and delivered. Almost there!"
+              : "Your transaction is being processed. This usually takes 1-3 minutes."}
           </p>
 
           {/* Status timeline */}
           <div className="w-full space-y-3">
             <StatusStep label="Transaction sent" done />
-            <StatusStep label="Swap in progress" active />
+            <StatusStep label="Funds detected" done={fundsDetected} active={!fundsDetected} />
+            <StatusStep label="Swap in progress" active={fundsDetected} />
             <StatusStep label="Payment confirmed" />
           </div>
         </div>
@@ -677,29 +702,60 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
                     No tokens available on {selectedChain.name}
                   </div>
                 ) : (
-                  filteredTokens.map((token) => (
-                    <button
-                      key={token.defuse_asset_id}
-                      onClick={() => {
-                        setSelectedToken(token);
-                        setTokenDropdownOpen(false);
-                      }}
-                      className={cn(
-                        "w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-zinc-800 transition-colors",
-                        token.defuse_asset_id === selectedToken?.defuse_asset_id && "bg-zinc-800 text-blue-400"
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className={token.defuse_asset_id === selectedToken?.defuse_asset_id ? "text-blue-400" : "text-zinc-200"}>
-                          {token.symbol}
-                        </span>
-                        <span className="text-zinc-500 text-xs">{token.name}</span>
-                      </div>
-                      {token.defuse_asset_id === selectedToken?.defuse_asset_id && (
-                        <Check className="h-4 w-4 text-blue-400" />
-                      )}
-                    </button>
-                  ))
+                  <>
+                    {(() => {
+                      const popularSymbols = ["USDC", "USDT", "ETH", "WETH", "SOL", "BTC", "WBTC"];
+                      const popular = filteredTokens.filter((t) =>
+                        popularSymbols.includes(t.symbol.toUpperCase())
+                      );
+                      const rest = filteredTokens.filter(
+                        (t) => !popularSymbols.includes(t.symbol.toUpperCase())
+                      );
+
+                      return (
+                        <>
+                          {popular.length > 0 && (
+                            <>
+                              <div className="px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-600">
+                                Popular
+                              </div>
+                              {popular.map((token) => (
+                                <TokenOption
+                                  key={token.defuse_asset_id}
+                                  token={token}
+                                  selected={token.defuse_asset_id === selectedToken?.defuse_asset_id}
+                                  onSelect={() => {
+                                    setSelectedToken(token);
+                                    setTokenDropdownOpen(false);
+                                  }}
+                                />
+                              ))}
+                            </>
+                          )}
+                          {rest.length > 0 && (
+                            <>
+                              {popular.length > 0 && (
+                                <div className="px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-600 border-t border-zinc-800 mt-1 pt-1.5">
+                                  All tokens
+                                </div>
+                              )}
+                              {rest.map((token) => (
+                                <TokenOption
+                                  key={token.defuse_asset_id}
+                                  token={token}
+                                  selected={token.defuse_asset_id === selectedToken?.defuse_asset_id}
+                                  onSelect={() => {
+                                    setSelectedToken(token);
+                                    setTokenDropdownOpen(false);
+                                  }}
+                                />
+                              ))}
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </>
                 )}
               </div>
             )}
@@ -853,6 +909,34 @@ function AmountHeader({ payment }: { payment: PaymentData }) {
       </p>
       <p className="text-sm text-zinc-400 mt-1">{payment.currency}</p>
     </div>
+  );
+}
+
+function TokenOption({
+  token,
+  selected,
+  onSelect,
+}: {
+  token: Token;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      onClick={onSelect}
+      className={cn(
+        "w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-zinc-800 transition-colors",
+        selected && "bg-zinc-800 text-blue-400"
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span className={selected ? "text-blue-400" : "text-zinc-200"}>
+          {token.symbol}
+        </span>
+        <span className="text-zinc-500 text-xs">{token.name}</span>
+      </div>
+      {selected && <Check className="h-4 w-4 text-blue-400" />}
+    </button>
   );
 }
 
