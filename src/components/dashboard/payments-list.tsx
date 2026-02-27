@@ -14,8 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, ChevronLeft, ChevronRight, CreditCard } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, CreditCard, Share2 } from "lucide-react";
 import { useState } from "react";
+import { SharePaymentDialog } from "@/components/dashboard/share-payment-dialog";
 
 interface Payment {
   id: string;
@@ -28,6 +29,7 @@ interface Payment {
   status: string;
   customer_wallet: string | null;
   send_tx_hash: string | null;
+  payment_url: string | null;
   created_at: string;
 }
 
@@ -63,6 +65,7 @@ export function PaymentsList({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(currentSearch);
+  const [sharePayment, setSharePayment] = useState<Payment | null>(null);
 
   const totalPages = Math.ceil(totalCount / perPage);
 
@@ -138,30 +141,33 @@ export function PaymentsList({
                 <div className="col-span-2">Amount</div>
                 <div className="col-span-2">Crypto</div>
                 <div className="col-span-2">Status</div>
-                <div className="col-span-3">Date</div>
+                <div className="col-span-2">Date</div>
+                <div className="col-span-1"></div>
               </div>
 
               {/* Rows */}
               {payments.map((payment) => (
-                <Link
+                <div
                   key={payment.id}
-                  href={`/dashboard/payments/${payment.id}`}
                   className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-6 py-4 border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors items-center"
                 >
-                  <div className="col-span-3">
+                  <Link
+                    href={`/dashboard/payments/${payment.id}`}
+                    className="col-span-3"
+                  >
                     <p className="text-sm font-medium text-white truncate">
                       {payment.external_order_id || `#${payment.id.slice(0, 8)}`}
                     </p>
                     <p className="text-xs text-zinc-500 truncate md:hidden">
                       {formatDate(payment.created_at)}
                     </p>
-                  </div>
-                  <div className="col-span-2">
+                  </Link>
+                  <Link href={`/dashboard/payments/${payment.id}`} className="col-span-2">
                     <span className="text-sm font-medium text-white">
                       {formatCurrency(Number(payment.amount), payment.currency)}
                     </span>
-                  </div>
-                  <div className="col-span-2">
+                  </Link>
+                  <Link href={`/dashboard/payments/${payment.id}`} className="col-span-2">
                     {payment.crypto_amount ? (
                       <span className="text-sm text-zinc-400">
                         {payment.crypto_amount} {payment.crypto_token}
@@ -169,18 +175,33 @@ export function PaymentsList({
                     ) : (
                       <span className="text-sm text-zinc-600">--</span>
                     )}
-                  </div>
+                  </Link>
                   <div className="col-span-2">
                     <Badge className={getStatusColor(payment.status)} variant="outline">
                       {payment.status}
                     </Badge>
                   </div>
-                  <div className="col-span-3 hidden md:block">
+                  <div className="col-span-2 hidden md:block">
                     <span className="text-sm text-zinc-400">
                       {formatDate(payment.created_at)}
                     </span>
                   </div>
-                </Link>
+                  <div className="col-span-1 hidden md:flex justify-end">
+                    {(payment.status === "pending" || payment.status === "processing") &&
+                      payment.payment_url && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSharePayment(payment);
+                          }}
+                          className="p-1.5 rounded-md text-zinc-500 hover:text-blue-400 hover:bg-zinc-800 transition-colors"
+                          title="Share payment link"
+                        >
+                          <Share2 className="h-4 w-4" />
+                        </button>
+                      )}
+                  </div>
+                </div>
               ))}
             </>
           )}
@@ -216,6 +237,24 @@ export function PaymentsList({
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Share dialog */}
+      {sharePayment && sharePayment.payment_url && (
+        <SharePaymentDialog
+          payment={{
+            id: sharePayment.id,
+            amount: Number(sharePayment.amount),
+            currency: sharePayment.currency,
+            status: sharePayment.status,
+            payment_url: sharePayment.payment_url,
+            external_order_id: sharePayment.external_order_id,
+          }}
+          open={!!sharePayment}
+          onOpenChange={(open) => {
+            if (!open) setSharePayment(null);
+          }}
+        />
       )}
     </div>
   );

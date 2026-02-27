@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   LayoutDashboard,
   CreditCard,
+  Link2,
   Settings,
   LogOut,
   Zap,
@@ -28,6 +29,11 @@ const navItems = [
     title: "Payments",
     href: "/dashboard/payments",
     icon: CreditCard,
+  },
+  {
+    title: "Payment Links",
+    href: "/dashboard/links",
+    icon: Link2,
   },
   {
     title: "Settings",
