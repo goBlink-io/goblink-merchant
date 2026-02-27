@@ -28,7 +28,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { CopyButton } from "@/components/dashboard/copy-button";
-import { Key, Plus, Trash2, Globe, Webhook, Building2, AlertCircle } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Key, Plus, Trash2, Globe, Webhook, Building2, AlertCircle, Play, RotateCw, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 interface Merchant {
@@ -495,6 +500,170 @@ function ApiKeySettings({
   );
 }
 
+interface WebhookDelivery {
+  id: string;
+  event: string;
+  payload: Record<string, unknown>;
+  response_status: number | null;
+  response_body: string | null;
+  attempt: number;
+  delivered_at: string | null;
+  created_at: string;
+}
+
+function statusColor(status: number | null): string {
+  if (status === null) return "text-zinc-500";
+  if (status >= 200 && status < 300) return "text-emerald-400";
+  return "text-red-400";
+}
+
+function statusBadgeVariant(status: number | null): "success" | "destructive" | "secondary" {
+  if (status === null) return "secondary";
+  if (status >= 200 && status < 300) return "success";
+  return "destructive";
+}
+
+function DeliveryLogViewer({ webhookId }: { webhookId: string }) {
+  const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState<string | null>(null);
+
+  async function loadDeliveries() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/v1/internal/webhooks/${webhookId}/deliveries`);
+      if (res.ok) {
+        const json = await res.json();
+        setDeliveries(json.data ?? []);
+      }
+    } finally {
+      setLoading(false);
+      setLoaded(true);
+    }
+  }
+
+  async function handleRetry(deliveryId: string) {
+    setRetrying(deliveryId);
+    try {
+      await fetch(`/api/v1/internal/webhooks/deliveries/${deliveryId}/retry`, {
+        method: "POST",
+      });
+      // Reload deliveries to show the new attempt
+      await loadDeliveries();
+    } finally {
+      setRetrying(null);
+    }
+  }
+
+  if (!loaded) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-xs text-zinc-500"
+        onClick={loadDeliveries}
+        disabled={loading}
+      >
+        {loading ? (
+          <><Loader2 className="h-3 w-3 animate-spin" /> Loading...</>
+        ) : (
+          "View delivery log"
+        )}
+      </Button>
+    );
+  }
+
+  if (deliveries.length === 0) {
+    return (
+      <p className="text-xs text-zinc-600 py-2">No deliveries yet.</p>
+    );
+  }
+
+  return (
+    <div className="space-y-1 mt-2">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-medium text-zinc-400">Recent Deliveries</p>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-xs text-zinc-500 h-6 px-2"
+          onClick={loadDeliveries}
+          disabled={loading}
+        >
+          <RotateCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
+      </div>
+      {deliveries.map((d) => {
+        const isExpanded = expandedId === d.id;
+        const isFailed = d.response_status === null || d.response_status >= 300;
+        return (
+          <Collapsible key={d.id} open={isExpanded} onOpenChange={(open) => setExpandedId(open ? d.id : null)}>
+            <div className="rounded border border-zinc-800 bg-zinc-900/50">
+              <CollapsibleTrigger asChild>
+                <button className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-zinc-800/50 transition-colors">
+                  {isExpanded ? (
+                    <ChevronDown className="h-3 w-3 text-zinc-500 shrink-0" />
+                  ) : (
+                    <ChevronRight className="h-3 w-3 text-zinc-500 shrink-0" />
+                  )}
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    {d.event}
+                  </Badge>
+                  <Badge variant={statusBadgeVariant(d.response_status)} className="text-xs shrink-0">
+                    {d.response_status ?? "pending"}
+                  </Badge>
+                  <span className="text-xs text-zinc-500">
+                    attempt {d.attempt}
+                  </span>
+                  <span className="text-xs text-zinc-600 ml-auto shrink-0">
+                    {formatDate(d.created_at)}
+                  </span>
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="px-3 pb-3 space-y-2 border-t border-zinc-800">
+                  <div className="mt-2">
+                    <p className="text-xs font-medium text-zinc-400 mb-1">Payload</p>
+                    <pre className="text-xs text-zinc-300 bg-zinc-950 rounded p-2 overflow-x-auto max-h-40">
+                      {JSON.stringify(d.payload, null, 2)}
+                    </pre>
+                  </div>
+                  {d.response_body && (
+                    <div>
+                      <p className="text-xs font-medium text-zinc-400 mb-1">Response</p>
+                      <pre className="text-xs text-zinc-300 bg-zinc-950 rounded p-2 overflow-x-auto max-h-40">
+                        {d.response_body}
+                      </pre>
+                    </div>
+                  )}
+                  {isFailed && d.response_status !== null && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-7"
+                      onClick={() => handleRetry(d.id)}
+                      disabled={retrying === d.id}
+                    >
+                      {retrying === d.id ? (
+                        <><Loader2 className="h-3 w-3 animate-spin" /> Retrying...</>
+                      ) : (
+                        <><RotateCw className="h-3 w-3" /> Retry</>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
+        );
+      })}
+    </div>
+  );
+}
+
 function WebhookSettings({
   merchantId,
   webhooks,
@@ -506,6 +675,8 @@ function WebhookSettings({
   const [creating, setCreating] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvents, setSelectedEvents] = useState<string[]>(["payment.confirmed"]);
+  const [testing, setTesting] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ id: string; delivered: boolean; status: number | null } | null>(null);
   const router = useRouter();
 
   const eventOptions = [
@@ -513,6 +684,7 @@ function WebhookSettings({
     "payment.processing",
     "payment.confirmed",
     "payment.failed",
+    "payment.expired",
     "payment.refunded",
     "payment.partially_refunded",
   ];
@@ -545,6 +717,22 @@ function WebhookSettings({
 
     if (res.ok) {
       router.refresh();
+    }
+  }
+
+  async function handleTestWebhook(webhookId: string) {
+    setTesting(webhookId);
+    setTestResult(null);
+    try {
+      const res = await fetch(`/api/v1/internal/webhooks/${webhookId}/test`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTestResult({ id: webhookId, delivered: data.delivered, status: data.responseStatus });
+      }
+    } finally {
+      setTesting(null);
     }
   }
 
@@ -637,37 +825,64 @@ function WebhookSettings({
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-4">
             {webhooks.map((wh) => (
               <div
                 key={wh.id}
-                className="flex items-center justify-between py-3 px-4 rounded-lg bg-zinc-800/30 border border-zinc-800"
+                className="rounded-lg bg-zinc-800/30 border border-zinc-800"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <code className="text-sm text-white font-mono truncate">
-                      {wh.url}
-                    </code>
-                    <Badge variant={wh.is_active ? "success" : "secondary"}>
-                      {wh.is_active ? "active" : "inactive"}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    {wh.events.map((event) => (
-                      <Badge key={event} variant="outline" className="text-xs">
-                        {event}
+                <div className="flex items-center justify-between py-3 px-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <code className="text-sm text-white font-mono truncate">
+                        {wh.url}
+                      </code>
+                      <Badge variant={wh.is_active ? "success" : "secondary"}>
+                        {wh.is_active ? "active" : "inactive"}
                       </Badge>
-                    ))}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      {wh.events.map((event) => (
+                        <Badge key={event} variant="outline" className="text-xs">
+                          {event}
+                        </Badge>
+                      ))}
+                    </div>
+                    {testResult && testResult.id === wh.id && (
+                      <p className={`text-xs mt-1 ${testResult.delivered ? "text-emerald-400" : "text-red-400"}`}>
+                        Test {testResult.delivered ? "delivered" : "failed"}{testResult.status ? ` (${testResult.status})` : ""}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-zinc-500 hover:text-blue-400"
+                      onClick={() => handleTestWebhook(wh.id)}
+                      disabled={testing === wh.id}
+                      title="Send test event"
+                    >
+                      {testing === wh.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-zinc-500 hover:text-red-400"
+                      onClick={() => handleDeleteWebhook(wh.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-zinc-500 hover:text-red-400 shrink-0 ml-2"
-                  onClick={() => handleDeleteWebhook(wh.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="px-4 pb-3">
+                  <Separator className="mb-2" />
+                  <DeliveryLogViewer webhookId={wh.id} />
+                </div>
               </div>
             ))}
           </div>

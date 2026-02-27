@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
     "payment.processing",
     "payment.confirmed",
     "payment.failed",
+    "payment.expired",
     "payment.refunded",
     "payment.partially_refunded",
     "invoice.paid",
