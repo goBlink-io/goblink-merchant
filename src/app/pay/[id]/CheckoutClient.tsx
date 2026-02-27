@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import confetti from "canvas-confetti";
 import dynamic from "next/dynamic";
 import {
   ChevronDown,
@@ -433,21 +434,52 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
     );
   }
 
-  // Success
+  // Success — fire confetti on mount
+  const confettiFired = useRef(false);
+  useEffect(() => {
+    if (step === "success" && !confettiFired.current) {
+      confettiFired.current = true;
+      const duration = 2000;
+      const end = Date.now() + duration;
+      const frame = () => {
+        confetti({
+          particleCount: 3,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0, y: 0.7 },
+          colors: ["#10b981", "#3b82f6", "#8b5cf6"],
+        });
+        confetti({
+          particleCount: 3,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1, y: 0.7 },
+          colors: ["#10b981", "#3b82f6", "#8b5cf6"],
+        });
+        if (Date.now() < end) requestAnimationFrame(frame);
+      };
+      frame();
+    }
+  }, [step]);
+
   if (step === "success") {
     return (
       <Card merchant={merchant}>
+        <JourneyStepper current="done" />
         <div className="flex flex-col items-center text-center py-8">
-          <div className="h-16 w-16 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4 animate-in zoom-in duration-300">
-            <Check className="h-8 w-8 text-emerald-400" />
+          <div className="h-20 w-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-5 animate-in zoom-in duration-500">
+            <Check className="h-10 w-10 text-emerald-400" />
           </div>
-          <h2 className="text-xl font-semibold text-zinc-100 mb-2">Payment Confirmed</h2>
-          <p className="text-sm text-zinc-400 mb-6">
-            {formatCurrency(payment.amount, payment.currency)} has been received successfully.
+          <h2 className="text-xl font-semibold text-zinc-100 mb-1">Payment Complete!</h2>
+          <p className="text-sm text-zinc-400 mb-1">
+            {formatCurrency(payment.amount, payment.currency)} delivered to merchant
+          </p>
+          <p className="text-xs text-zinc-500 mb-6">
+            The merchant has been notified of your payment.
           </p>
           {payment.fulfillmentTxHash && (
             <div className="w-full p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/50 mb-4">
-              <p className="text-xs text-zinc-500 mb-1">Transaction Hash</p>
+              <p className="text-xs text-zinc-500 mb-1">Transaction</p>
               {(() => {
                 const chain = payment.customerChain || merchant?.settlementChain;
                 const explorerUrl = chain
@@ -481,6 +513,12 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
             </a>
           )}
         </div>
+
+        {/* Trust footer on success too */}
+        <div className="flex items-center justify-center gap-1.5 mt-2 text-xs text-zinc-500">
+          <Shield className="h-3.5 w-3.5" />
+          Direct to merchant &middot; We never touch your funds
+        </div>
       </Card>
     );
   }
@@ -497,10 +535,15 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
           <h2 className="text-xl font-semibold text-zinc-100 mb-2">
             {isRefunded ? "Payment Refunded" : "Payment Failed"}
           </h2>
-          <p className="text-sm text-zinc-400 mb-6">
+          <p className="text-sm text-zinc-400 mb-2">
             {isRefunded
-              ? "This payment was refunded. Funds have been returned to your wallet."
-              : "Something went wrong with this payment. Please contact the merchant for assistance."}
+              ? "Don't worry — your funds have been returned to your wallet automatically."
+              : "Something went wrong, but your funds are safe."}
+          </p>
+          <p className="text-xs text-zinc-500 mb-6">
+            {isRefunded
+              ? "The refund should appear in your wallet shortly."
+              : "If you sent funds, they will be auto-refunded to your wallet. No action needed."}
           </p>
           {payment.returnUrl && (
             <a
@@ -533,6 +576,14 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
               ? "Your funds are being swapped and delivered. Almost there!"
               : "Your transaction is being processed. This usually takes 1-3 minutes."}
           </p>
+
+          {/* Animated progress bar */}
+          <div className="w-full h-1.5 rounded-full bg-zinc-800 mb-6 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-1000 ease-out"
+              style={{ width: fundsDetected ? "75%" : "35%" }}
+            />
+          </div>
 
           {/* Status timeline */}
           <div className="w-full space-y-3">
@@ -849,6 +900,9 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
         <Shield className="h-3.5 w-3.5" />
         Direct to merchant &middot; We never touch your funds
       </div>
+
+      {/* How it works */}
+      <HowItWorks />
     </Card>
   );
 }
@@ -908,6 +962,45 @@ function AmountHeader({ payment }: { payment: PaymentData }) {
         {formatCurrency(payment.amount, payment.currency)}
       </p>
       <p className="text-sm text-zinc-400 mt-1">{payment.currency}</p>
+    </div>
+  );
+}
+
+function HowItWorks() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-4">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-center gap-1.5 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+      >
+        <span>How it works</span>
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 transition-transform",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+      {open && (
+        <div className="mt-3 p-4 rounded-xl bg-zinc-800/30 border border-zinc-700/30 space-y-2.5 text-xs text-zinc-400 animate-in slide-in-from-top-2 duration-200">
+          <p>
+            <span className="text-zinc-300 font-medium">1. Choose</span> — Pick
+            which chain and token you want to pay with.
+          </p>
+          <p>
+            <span className="text-zinc-300 font-medium">2. Pay</span> — Send
+            tokens to a one-time deposit address. Your tokens are automatically
+            swapped and delivered to the merchant.
+          </p>
+          <p>
+            <span className="text-zinc-300 font-medium">3. Done</span> — The
+            merchant receives the exact amount in their preferred token. If
+            anything goes wrong, you get an automatic refund.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
