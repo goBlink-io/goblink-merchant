@@ -4,16 +4,23 @@ import {
   QuoteRequest,
 } from "@defuse-protocol/one-click-sdk-typescript";
 
-// Configure 1Click SDK — all values from environment, no hardcoded fallbacks
-if (!process.env.ONE_CLICK_BASE_URL) {
-  throw new Error("ONE_CLICK_BASE_URL environment variable is required");
-}
-OpenAPI.BASE = process.env.ONE_CLICK_BASE_URL;
-if (process.env.ONE_CLICK_JWT) {
-  OpenAPI.TOKEN = process.env.ONE_CLICK_JWT.trim();
+// Lazy SDK init — deferred so module can be imported at build time without env vars
+let _initialized = false;
+
+function ensureInit() {
+  if (_initialized) return;
+  if (!process.env.ONE_CLICK_BASE_URL) {
+    throw new Error("ONE_CLICK_BASE_URL environment variable is required");
+  }
+  OpenAPI.BASE = process.env.ONE_CLICK_BASE_URL;
+  if (process.env.ONE_CLICK_JWT) {
+    OpenAPI.TOKEN = process.env.ONE_CLICK_JWT.trim();
+  }
+  _initialized = true;
 }
 
 export async function getTokens() {
+  ensureInit();
   return OneClickService.getTokens();
 }
 
@@ -59,6 +66,7 @@ export async function getQuote(params: {
   slippageTolerance?: number;
   dryRun?: boolean;
 }) {
+  ensureInit();
   const request = buildQuoteRequest({
     ...params,
     dry: params.dryRun ?? true,
@@ -75,6 +83,7 @@ export async function submitDeposit(params: {
   swapType: "EXACT_INPUT" | "EXACT_OUTPUT";
   slippageTolerance?: number;
 }) {
+  ensureInit();
   const request = buildQuoteRequest({
     ...params,
     dry: false,
@@ -83,5 +92,6 @@ export async function submitDeposit(params: {
 }
 
 export async function getExecutionStatus(depositAddress: string) {
+  ensureInit();
   return OneClickService.getExecutionStatus(depositAddress);
 }

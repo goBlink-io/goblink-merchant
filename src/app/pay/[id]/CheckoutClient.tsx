@@ -19,6 +19,7 @@ import ConnectWalletModal from "@/components/checkout/ConnectWalletModal";
 import { SUPPORTED_CHAINS, type SupportedChain, type ChainType } from "@/lib/chains";
 import { isTokenHidden } from "@/lib/token-filters";
 import { cn, formatCurrency, truncateAddress } from "@/lib/utils";
+import { getExplorerTxUrl } from "@/lib/explorer";
 
 // Dynamic import Web3Provider to avoid SSR issues
 const Web3Provider = dynamic(
@@ -105,6 +106,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
     if (initialPayment.status === "confirmed") return "success";
     if (initialPayment.status === "processing") return "processing";
     if (initialPayment.status === "failed") return "failed";
+    if (initialPayment.status === "refunded") return "failed";
     if (initialPayment.status === "expired") return "failed";
     return "select";
   });
@@ -329,23 +331,35 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
     }
   };
 
-  // --- Poll for completion ---
+  // --- Poll for completion via lightweight status endpoint ---
   const startPolling = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
 
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/checkout/${paymentId}`);
+        const res = await fetch(`/api/checkout/${paymentId}/status`);
         if (!res.ok) return;
         const data = await res.json();
-        const p = data.payment;
 
-        setPayment((prev) => ({ ...prev, ...p }));
+        setPayment((prev) => ({
+          ...prev,
+          status: data.status,
+          sendTxHash: data.sendTxHash ?? prev.sendTxHash,
+          fulfillmentTxHash: data.fulfillmentTxHash ?? prev.fulfillmentTxHash,
+          confirmedAt: data.confirmedAt ?? prev.confirmedAt,
+          customerChain: data.customerChain ?? prev.customerChain,
+        }));
 
-        if (p.status === "confirmed") {
+        if (data.status === "confirmed") {
           setStep("success");
           if (pollRef.current) clearInterval(pollRef.current);
-        } else if (p.status === "failed") {
+        } else if (data.status === "failed") {
+          setStep("failed");
+          if (pollRef.current) clearInterval(pollRef.current);
+        } else if (data.status === "refunded") {
+          setStep("failed");
+          if (pollRef.current) clearInterval(pollRef.current);
+        } else if (data.status === "expired") {
           setStep("failed");
           if (pollRef.current) clearInterval(pollRef.current);
         }
@@ -414,9 +428,27 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
           {payment.fulfillmentTxHash && (
             <div className="w-full p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/50 mb-4">
               <p className="text-xs text-zinc-500 mb-1">Transaction Hash</p>
-              <p className="text-xs font-mono text-zinc-300 break-all">
-                {payment.fulfillmentTxHash}
-              </p>
+              {(() => {
+                const chain = payment.customerChain || merchant?.settlementChain;
+                const explorerUrl = chain
+                  ? getExplorerTxUrl(chain, payment.fulfillmentTxHash)
+                  : null;
+                return explorerUrl ? (
+                  <a
+                    href={explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-mono text-blue-400 hover:text-blue-300 break-all inline-flex items-center gap-1"
+                  >
+                    {payment.fulfillmentTxHash}
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                ) : (
+                  <p className="text-xs font-mono text-zinc-300 break-all">
+                    {payment.fulfillmentTxHash}
+                  </p>
+                );
+              })()}
             </div>
           )}
           {payment.returnUrl && (
@@ -433,17 +465,22 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
     );
   }
 
-  // Failed
+  // Failed / Refunded
   if (step === "failed") {
+    const isRefunded = payment.status === "refunded";
     return (
       <Card merchant={merchant}>
         <div className="flex flex-col items-center text-center py-8">
           <div className="h-16 w-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
             <AlertCircle className="h-8 w-8 text-red-400" />
           </div>
-          <h2 className="text-xl font-semibold text-zinc-100 mb-2">Payment Failed</h2>
+          <h2 className="text-xl font-semibold text-zinc-100 mb-2">
+            {isRefunded ? "Payment Refunded" : "Payment Failed"}
+          </h2>
           <p className="text-sm text-zinc-400 mb-6">
-            Something went wrong with this payment. Please contact the merchant for assistance.
+            {isRefunded
+              ? "This payment was refunded. Funds have been returned to your wallet."
+              : "Something went wrong with this payment. Please contact the merchant for assistance."}
           </p>
           {payment.returnUrl && (
             <a
