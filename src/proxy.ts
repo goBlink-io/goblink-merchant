@@ -16,6 +16,6 @@ export const config = {
      * - api/checkout (public checkout API routes — no auth)
      * - pay (public checkout page — no auth)
      */
-    "/((?!_next/static|_next/image|favicon.ico|api/v1|api/checkout|pay).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/v1|api/checkout|api/cron|pay).*)",
   ],
 };
