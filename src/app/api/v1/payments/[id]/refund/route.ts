@@ -3,6 +3,7 @@ import { validateApiKey } from "@/lib/api-auth";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { dispatchWebhooks } from "@/lib/webhooks";
+import { logAudit } from "@/lib/audit";
 
 // POST /api/v1/payments/:id/refund — Initiate refund
 export async function POST(
@@ -116,6 +117,16 @@ export async function POST(
       originalAmount: payment.amount,
       totalRefunded: totalRefunded + refundAmount,
     },
+  });
+
+  logAudit({
+    merchantId: auth.merchantId,
+    actor: auth.keyId,
+    action: isFullRefund ? "payment.refunded" : "payment.partially_refunded",
+    resourceType: "payment",
+    resourceId: paymentId,
+    metadata: { refundId: refund.id, amount: refundAmount, reason: reason || null },
+    ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
   });
 
   return apiSuccess(

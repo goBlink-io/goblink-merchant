@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import confetti from "canvas-confetti";
 import dynamic from "next/dynamic";
 import {
   ChevronDown,
@@ -113,6 +114,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
 
   // Chain & token selection
   const [selectedChain, setSelectedChain] = useState<SupportedChain>(SUPPORTED_CHAINS[4]); // Default Ethereum
+  const [chainAutoDetected, setChainAutoDetected] = useState(false);
   const [chainDropdownOpen, setChainDropdownOpen] = useState(false);
   const [tokens, setTokens] = useState<Token[]>([]);
   const [selectedToken, setSelectedToken] = useState<Token | null>(null);
@@ -132,6 +134,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
 
   // Polling
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [fundsDetected, setFundsDetected] = useState(false);
 
   // Wallet
   const {
@@ -142,6 +145,19 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
 
   const walletConnected = isChainConnected(selectedChain.type);
   const walletAddress = getAddressForChain(selectedChain.type);
+
+  // --- Auto-detect chain from connected wallet ---
+  useEffect(() => {
+    if (chainAutoDetected) return;
+    for (const chain of SUPPORTED_CHAINS) {
+      if (isChainConnected(chain.type)) {
+        setSelectedChain(chain);
+        setChainAutoDetected(true);
+        setSelectedToken(null);
+        break;
+      }
+    }
+  }, [chainAutoDetected, isChainConnected]);
 
   // --- Fetch tokens ---
   useEffect(() => {
@@ -350,6 +366,11 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
           customerChain: data.customerChain ?? prev.customerChain,
         }));
 
+        // Detect intermediate progress — funds received by 1Click
+        if (data.sendTxHash && data.sendTxHash !== "pending" && data.sendTxHash !== "user-submitted") {
+          setFundsDetected(true);
+        }
+
         if (data.status === "confirmed") {
           setStep("success");
           if (pollRef.current) clearInterval(pollRef.current);
@@ -413,21 +434,52 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
     );
   }
 
-  // Success
+  // Success — fire confetti on mount
+  const confettiFired = useRef(false);
+  useEffect(() => {
+    if (step === "success" && !confettiFired.current) {
+      confettiFired.current = true;
+      const duration = 2000;
+      const end = Date.now() + duration;
+      const frame = () => {
+        confetti({
+          particleCount: 3,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0, y: 0.7 },
+          colors: ["#10b981", "#3b82f6", "#8b5cf6"],
+        });
+        confetti({
+          particleCount: 3,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1, y: 0.7 },
+          colors: ["#10b981", "#3b82f6", "#8b5cf6"],
+        });
+        if (Date.now() < end) requestAnimationFrame(frame);
+      };
+      frame();
+    }
+  }, [step]);
+
   if (step === "success") {
     return (
       <Card merchant={merchant}>
+        <JourneyStepper current="done" />
         <div className="flex flex-col items-center text-center py-8">
-          <div className="h-16 w-16 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4 animate-in zoom-in duration-300">
-            <Check className="h-8 w-8 text-emerald-400" />
+          <div className="h-20 w-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-5 animate-in zoom-in duration-500">
+            <Check className="h-10 w-10 text-emerald-400" />
           </div>
-          <h2 className="text-xl font-semibold text-zinc-100 mb-2">Payment Confirmed</h2>
-          <p className="text-sm text-zinc-400 mb-6">
-            {formatCurrency(payment.amount, payment.currency)} has been received successfully.
+          <h2 className="text-xl font-semibold text-zinc-100 mb-1">Payment Complete!</h2>
+          <p className="text-sm text-zinc-400 mb-1">
+            {formatCurrency(payment.amount, payment.currency)} delivered to merchant
+          </p>
+          <p className="text-xs text-zinc-500 mb-6">
+            The merchant has been notified of your payment.
           </p>
           {payment.fulfillmentTxHash && (
             <div className="w-full p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/50 mb-4">
-              <p className="text-xs text-zinc-500 mb-1">Transaction Hash</p>
+              <p className="text-xs text-zinc-500 mb-1">Transaction</p>
               {(() => {
                 const chain = payment.customerChain || merchant?.settlementChain;
                 const explorerUrl = chain
@@ -461,6 +513,12 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
             </a>
           )}
         </div>
+
+        {/* Trust footer on success too */}
+        <div className="flex items-center justify-center gap-1.5 mt-2 text-xs text-zinc-500">
+          <Shield className="h-3.5 w-3.5" />
+          Direct to merchant &middot; We never touch your funds
+        </div>
       </Card>
     );
   }
@@ -477,10 +535,15 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
           <h2 className="text-xl font-semibold text-zinc-100 mb-2">
             {isRefunded ? "Payment Refunded" : "Payment Failed"}
           </h2>
-          <p className="text-sm text-zinc-400 mb-6">
+          <p className="text-sm text-zinc-400 mb-2">
             {isRefunded
-              ? "This payment was refunded. Funds have been returned to your wallet."
-              : "Something went wrong with this payment. Please contact the merchant for assistance."}
+              ? "Don't worry — your funds have been returned to your wallet automatically."
+              : "Something went wrong, but your funds are safe."}
+          </p>
+          <p className="text-xs text-zinc-500 mb-6">
+            {isRefunded
+              ? "The refund should appear in your wallet shortly."
+              : "If you sent funds, they will be auto-refunded to your wallet. No action needed."}
           </p>
           {payment.returnUrl && (
             <a
@@ -499,20 +562,34 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   if (step === "processing") {
     return (
       <Card merchant={merchant}>
+        <JourneyStepper current="pay" />
         <AmountHeader payment={payment} />
         <div className="flex flex-col items-center text-center py-8">
           <div className="h-16 w-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
             <Loader2 className="h-8 w-8 text-blue-400 animate-spin" />
           </div>
-          <h2 className="text-lg font-semibold text-zinc-100 mb-2">Processing Payment</h2>
+          <h2 className="text-lg font-semibold text-zinc-100 mb-2">
+            {fundsDetected ? "Funds detected!" : "Processing Payment"}
+          </h2>
           <p className="text-sm text-zinc-400 mb-6">
-            Your transaction is being processed. This usually takes 1-3 minutes.
+            {fundsDetected
+              ? "Your funds are being swapped and delivered. Almost there!"
+              : "Your transaction is being processed. This usually takes 1-3 minutes."}
           </p>
+
+          {/* Animated progress bar */}
+          <div className="w-full h-1.5 rounded-full bg-zinc-800 mb-6 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-violet-500 transition-all duration-1000 ease-out"
+              style={{ width: fundsDetected ? "75%" : "35%" }}
+            />
+          </div>
 
           {/* Status timeline */}
           <div className="w-full space-y-3">
             <StatusStep label="Transaction sent" done />
-            <StatusStep label="Swap in progress" active />
+            <StatusStep label="Funds detected" done={fundsDetected} active={!fundsDetected} />
+            <StatusStep label="Swap in progress" active={fundsDetected} />
             <StatusStep label="Payment confirmed" />
           </div>
         </div>
@@ -524,6 +601,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   if (step === "confirm") {
     return (
       <Card merchant={merchant}>
+        <JourneyStepper current="pay" />
         <AmountHeader payment={payment} />
 
         <div className="space-y-4 mt-6">
@@ -589,6 +667,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   // --- Select step (main checkout form) ---
   return (
     <Card merchant={merchant}>
+      <JourneyStepper current="choose" />
       <AmountHeader payment={payment} />
 
       {/* Expiry */}
@@ -674,29 +753,60 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
                     No tokens available on {selectedChain.name}
                   </div>
                 ) : (
-                  filteredTokens.map((token) => (
-                    <button
-                      key={token.defuse_asset_id}
-                      onClick={() => {
-                        setSelectedToken(token);
-                        setTokenDropdownOpen(false);
-                      }}
-                      className={cn(
-                        "w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-zinc-800 transition-colors",
-                        token.defuse_asset_id === selectedToken?.defuse_asset_id && "bg-zinc-800 text-blue-400"
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className={token.defuse_asset_id === selectedToken?.defuse_asset_id ? "text-blue-400" : "text-zinc-200"}>
-                          {token.symbol}
-                        </span>
-                        <span className="text-zinc-500 text-xs">{token.name}</span>
-                      </div>
-                      {token.defuse_asset_id === selectedToken?.defuse_asset_id && (
-                        <Check className="h-4 w-4 text-blue-400" />
-                      )}
-                    </button>
-                  ))
+                  <>
+                    {(() => {
+                      const popularSymbols = ["USDC", "USDT", "ETH", "WETH", "SOL", "BTC", "WBTC"];
+                      const popular = filteredTokens.filter((t) =>
+                        popularSymbols.includes(t.symbol.toUpperCase())
+                      );
+                      const rest = filteredTokens.filter(
+                        (t) => !popularSymbols.includes(t.symbol.toUpperCase())
+                      );
+
+                      return (
+                        <>
+                          {popular.length > 0 && (
+                            <>
+                              <div className="px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-600">
+                                Popular
+                              </div>
+                              {popular.map((token) => (
+                                <TokenOption
+                                  key={token.defuse_asset_id}
+                                  token={token}
+                                  selected={token.defuse_asset_id === selectedToken?.defuse_asset_id}
+                                  onSelect={() => {
+                                    setSelectedToken(token);
+                                    setTokenDropdownOpen(false);
+                                  }}
+                                />
+                              ))}
+                            </>
+                          )}
+                          {rest.length > 0 && (
+                            <>
+                              {popular.length > 0 && (
+                                <div className="px-4 py-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-600 border-t border-zinc-800 mt-1 pt-1.5">
+                                  All tokens
+                                </div>
+                              )}
+                              {rest.map((token) => (
+                                <TokenOption
+                                  key={token.defuse_asset_id}
+                                  token={token}
+                                  selected={token.defuse_asset_id === selectedToken?.defuse_asset_id}
+                                  onSelect={() => {
+                                    setSelectedToken(token);
+                                    setTokenDropdownOpen(false);
+                                  }}
+                                />
+                              ))}
+                            </>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </>
                 )}
               </div>
             )}
@@ -771,6 +881,11 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
           </button>
         )}
 
+        {/* Auto-refund reassurance */}
+        <p className="text-xs text-zinc-500 text-center">
+          Auto-refund if transfer fails. No risk.
+        </p>
+
         {/* Connected wallet info */}
         {walletConnected && walletAddress && (
           <div className="flex items-center justify-center gap-2 text-xs text-zinc-500">
@@ -780,11 +895,14 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
         )}
       </div>
 
-      {/* Security footer */}
-      <div className="flex items-center justify-center gap-1.5 mt-6 text-xs text-zinc-600">
+      {/* Trust badge */}
+      <div className="flex items-center justify-center gap-1.5 mt-6 text-xs text-zinc-500">
         <Shield className="h-3.5 w-3.5" />
-        Non-custodial &middot; Funds go directly to merchant
+        Direct to merchant &middot; We never touch your funds
       </div>
+
+      {/* How it works */}
+      <HowItWorks />
     </Card>
   );
 }
@@ -844,6 +962,112 @@ function AmountHeader({ payment }: { payment: PaymentData }) {
         {formatCurrency(payment.amount, payment.currency)}
       </p>
       <p className="text-sm text-zinc-400 mt-1">{payment.currency}</p>
+    </div>
+  );
+}
+
+function HowItWorks() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-4">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-center gap-1.5 text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+      >
+        <span>How it works</span>
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 transition-transform",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+      {open && (
+        <div className="mt-3 p-4 rounded-xl bg-zinc-800/30 border border-zinc-700/30 space-y-2.5 text-xs text-zinc-400 animate-in slide-in-from-top-2 duration-200">
+          <p>
+            <span className="text-zinc-300 font-medium">1. Choose</span> — Pick
+            which chain and token you want to pay with.
+          </p>
+          <p>
+            <span className="text-zinc-300 font-medium">2. Pay</span> — Send
+            tokens to a one-time deposit address. Your tokens are automatically
+            swapped and delivered to the merchant.
+          </p>
+          <p>
+            <span className="text-zinc-300 font-medium">3. Done</span> — The
+            merchant receives the exact amount in their preferred token. If
+            anything goes wrong, you get an automatic refund.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TokenOption({
+  token,
+  selected,
+  onSelect,
+}: {
+  token: Token;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      onClick={onSelect}
+      className={cn(
+        "w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-zinc-800 transition-colors",
+        selected && "bg-zinc-800 text-blue-400"
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span className={selected ? "text-blue-400" : "text-zinc-200"}>
+          {token.symbol}
+        </span>
+        <span className="text-zinc-500 text-xs">{token.name}</span>
+      </div>
+      {selected && <Check className="h-4 w-4 text-blue-400" />}
+    </button>
+  );
+}
+
+function JourneyStepper({ current }: { current: "choose" | "pay" | "done" }) {
+  const steps = [
+    { id: "choose", label: "Choose" },
+    { id: "pay", label: "Pay" },
+    { id: "done", label: "Done ✓" },
+  ] as const;
+
+  const currentIdx = steps.findIndex((s) => s.id === current);
+
+  return (
+    <div className="flex items-center justify-center gap-2 mb-6">
+      {steps.map((s, i) => (
+        <div key={s.id} className="flex items-center gap-2">
+          <span
+            className={cn(
+              "text-xs font-medium transition-colors",
+              i < currentIdx
+                ? "text-emerald-400"
+                : i === currentIdx
+                  ? "text-blue-400"
+                  : "text-zinc-600"
+            )}
+          >
+            {s.label}
+          </span>
+          {i < steps.length - 1 && (
+            <ArrowRight
+              className={cn(
+                "h-3 w-3",
+                i < currentIdx ? "text-emerald-400" : "text-zinc-700"
+              )}
+            />
+          )}
+        </div>
+      ))}
     </div>
   );
 }

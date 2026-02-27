@@ -75,7 +75,7 @@ export default async function DashboardPage() {
           Welcome back, {merchant.business_name}
         </h1>
         <p className="text-zinc-400 mt-1">
-          Here&apos;s what&apos;s happening with your payments.
+          Accept crypto from any chain. Settle instantly to your wallet. No holds, no chargebacks, no middlemen.
         </p>
       </div>
 
