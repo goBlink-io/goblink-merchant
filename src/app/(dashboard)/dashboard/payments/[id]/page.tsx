@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { formatCurrency, formatDate, getStatusColor, truncateAddress } from "@/lib/utils";
+import { getExplorerTxUrl } from "@/lib/explorer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { CopyButton } from "@/components/dashboard/copy-button";
+import { PaymentShareSection } from "@/components/dashboard/payment-share-section";
 import {
   ArrowLeft,
   Clock,
@@ -15,6 +17,7 @@ import {
   XCircle,
   Loader2,
   CreditCard,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -159,19 +162,17 @@ export default async function PaymentDetailPage({
                   <Separator />
                   <div className="space-y-3">
                     {payment.send_tx_hash && (
-                      <DetailItem
+                      <TxHashItem
                         label="Send TX Hash"
-                        value={truncateAddress(payment.send_tx_hash, 10)}
-                        copyValue={payment.send_tx_hash}
-                        isHash
+                        txHash={payment.send_tx_hash}
+                        chain={payment.customer_chain}
                       />
                     )}
                     {payment.fulfillment_tx_hash && (
-                      <DetailItem
+                      <TxHashItem
                         label="Fulfillment TX Hash"
-                        value={truncateAddress(payment.fulfillment_tx_hash, 10)}
-                        copyValue={payment.fulfillment_tx_hash}
-                        isHash
+                        txHash={payment.fulfillment_tx_hash}
+                        chain={payment.crypto_chain}
                       />
                     )}
                   </div>
@@ -256,8 +257,30 @@ export default async function PaymentDetailPage({
           )}
         </div>
 
-        {/* Sidebar — Status Timeline */}
+        {/* Sidebar */}
         <div className="space-y-6">
+          {/* Share section for shareable payments */}
+          {(payment.status === "pending" || payment.status === "processing") &&
+            payment.payment_url && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Payment Link</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <PaymentShareSection
+                    payment={{
+                      id: payment.id,
+                      amount: Number(payment.amount),
+                      currency: payment.currency,
+                      status: payment.status,
+                      payment_url: payment.payment_url,
+                      external_order_id: payment.external_order_id,
+                    }}
+                  />
+                </CardContent>
+              </Card>
+            )}
+
           <Card>
             <CardHeader>
               <CardTitle>Status Timeline</CardTitle>
@@ -385,6 +408,41 @@ function DetailItem({
         <p className={`text-sm text-white ${isHash ? "font-mono" : ""}`}>{value}</p>
         {copyValue && (
           <CopyButton value={copyValue} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TxHashItem({
+  label,
+  txHash,
+  chain,
+}: {
+  label: string;
+  txHash: string;
+  chain: string | null;
+}) {
+  const explorerUrl = chain ? getExplorerTxUrl(chain, txHash) : null;
+
+  return (
+    <div>
+      <p className="text-xs text-zinc-500 mb-0.5">{label}</p>
+      <div className="flex items-center gap-2">
+        <p className="text-sm text-white font-mono">
+          {truncateAddress(txHash, 10)}
+        </p>
+        <CopyButton value={txHash} />
+        {explorerUrl && (
+          <a
+            href={explorerUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-400 hover:text-blue-300 transition-colors"
+            title="View on explorer"
+          >
+            <ExternalLink className="h-3 w-3" />
+          </a>
         )}
       </div>
     </div>
