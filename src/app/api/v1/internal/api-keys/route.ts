@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { generateApiKey } from "@/lib/api-auth";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
+import { logAudit } from "@/lib/audit";
 
 // POST — Create API key (authenticated via session)
 export async function POST(request: NextRequest) {
@@ -43,6 +44,16 @@ export async function POST(request: NextRequest) {
     isTest ?? false,
     label || "Default"
   );
+
+  logAudit({
+    merchantId,
+    actor: user.id,
+    action: "api_key.created",
+    resourceType: "api_key",
+    resourceId: keyId,
+    metadata: { label: label || "Default", isTest: isTest ?? false },
+    ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
+  });
 
   return apiSuccess({ apiKey, keyId }, 201);
 }
@@ -87,6 +98,15 @@ export async function DELETE(request: NextRequest) {
   if (error) {
     return apiError("Failed to delete API key", 500);
   }
+
+  logAudit({
+    merchantId,
+    actor: user.id,
+    action: "api_key.deleted",
+    resourceType: "api_key",
+    resourceId: keyId,
+    ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
+  });
 
   return apiSuccess({ deleted: true });
 }
