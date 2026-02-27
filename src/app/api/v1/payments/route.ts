@@ -48,6 +48,9 @@ export async function POST(request: NextRequest) {
     ? new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString()
     : new Date(Date.now() + 60 * 60 * 1000).toISOString(); // Default 1 hour
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+  // Insert payment first, then update with payment_url containing the generated ID
   const paymentData = {
     merchant_id: auth.merchantId,
     amount: Number(amount),
@@ -60,9 +63,22 @@ export async function POST(request: NextRequest) {
     expires_at: expiresAt,
   };
 
-  const { data: payment, error } = await supabase
+  const { data: inserted, error: insertError } = await supabase
     .from("payments")
     .insert(paymentData)
+    .select("*")
+    .single();
+
+  if (insertError || !inserted) {
+    return apiError(`Failed to create payment: ${insertError?.message}`, 500);
+  }
+
+  // Set payment_url with the generated ID
+  const paymentUrl = `${appUrl}/pay/${inserted.id}`;
+  const { data: payment, error } = await supabase
+    .from("payments")
+    .update({ payment_url: paymentUrl })
+    .eq("id", inserted.id)
     .select("*")
     .single();
 
