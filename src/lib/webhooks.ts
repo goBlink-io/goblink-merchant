@@ -23,13 +23,18 @@ function signPayload(payload: string, secret: string): string {
     .digest("hex");
 }
 
-async function deliverWebhook(
+/**
+ * Deliver a webhook to a single endpoint. Logs the result to webhook_deliveries.
+ * On failure, queues the next retry attempt as a row with delivered_at = null
+ * (picked up by the retry-webhooks cron). No more setTimeout.
+ */
+export async function deliverWebhook(
   endpointId: string,
   url: string,
   secret: string,
   event: WebhookEvent,
   attempt: number = 1
-): Promise<void> {
+): Promise<{ success: boolean; status: number | null; body: string | null }> {
   const supabase = getServiceClient();
   const payload = JSON.stringify(event);
   const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -40,7 +45,7 @@ async function deliverWebhook(
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     const response = await fetch(url, {
       method: "POST",
@@ -62,7 +67,9 @@ async function deliverWebhook(
     responseBody = err instanceof Error ? err.message : "Unknown error";
   }
 
-  // Log the delivery attempt
+  const isSuccess = responseStatus !== null && responseStatus >= 200 && responseStatus < 300;
+
+  // Log this delivery attempt
   await supabase.from("webhook_deliveries").insert({
     webhook_endpoint_id: endpointId,
     event: event.event,
@@ -70,20 +77,23 @@ async function deliverWebhook(
     response_status: responseStatus,
     response_body: responseBody?.slice(0, 1000) ?? null,
     attempt,
-    delivered_at: responseStatus && responseStatus >= 200 && responseStatus < 300
-      ? new Date().toISOString()
-      : null,
+    delivered_at: isSuccess ? new Date().toISOString() : null,
   });
 
-  // Retry on failure (up to 3 attempts)
-  const isSuccess = responseStatus !== null && responseStatus >= 200 && responseStatus < 300;
+  // On failure, queue the next retry as a pending row (picked up by cron)
   if (!isSuccess && attempt < 3) {
-    const delays = [1000, 10000, 60000]; // 1s, 10s, 60s
-    const delay = delays[attempt - 1] ?? 60000;
-    setTimeout(() => {
-      deliverWebhook(endpointId, url, secret, event, attempt + 1);
-    }, delay);
+    await supabase.from("webhook_deliveries").insert({
+      webhook_endpoint_id: endpointId,
+      event: event.event,
+      payload: event,
+      response_status: null,
+      response_body: null,
+      attempt: attempt + 1,
+      delivered_at: null,
+    });
   }
+
+  return { success: isSuccess, status: responseStatus, body: responseBody };
 }
 
 export async function dispatchWebhooks(
@@ -100,11 +110,102 @@ export async function dispatchWebhooks(
 
   if (error || !endpoints) return;
 
-  // Dispatch to all matching endpoints
   const promises = endpoints
     .filter((ep) => ep.events.includes(event.event) || ep.events.includes("*"))
     .map((ep) => deliverWebhook(ep.id, ep.url, ep.secret, event));
 
-  // Fire and forget — don't block the response
-  Promise.allSettled(promises);
+  // Await deliveries so they complete before the serverless function dies
+  await Promise.allSettled(promises);
+}
+
+/**
+ * Process a single pending retry delivery row. Fetches the endpoint,
+ * sends the webhook, and updates the row with the result.
+ */
+export async function processRetryDelivery(delivery: {
+  id: string;
+  webhook_endpoint_id: string;
+  event: string;
+  payload: WebhookEvent;
+  attempt: number;
+}): Promise<boolean> {
+  const supabase = getServiceClient();
+
+  // Fetch the endpoint (need url + secret)
+  const { data: endpoint } = await supabase
+    .from("webhook_endpoints")
+    .select("id, url, secret, is_active")
+    .eq("id", delivery.webhook_endpoint_id)
+    .single();
+
+  if (!endpoint || !endpoint.is_active) {
+    // Endpoint deleted or deactivated — mark as failed
+    await supabase
+      .from("webhook_deliveries")
+      .update({
+        response_status: null,
+        response_body: "Endpoint not found or inactive",
+        delivered_at: null,
+      })
+      .eq("id", delivery.id);
+    return false;
+  }
+
+  const payload = JSON.stringify(delivery.payload);
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = signPayload(`${timestamp}.${payload}`, endpoint.secret);
+
+  let responseStatus: number | null = null;
+  let responseBody: string | null = null;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const response = await fetch(endpoint.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-GoBlink-Signature": signature,
+        "X-GoBlink-Timestamp": timestamp,
+        "X-GoBlink-Event": delivery.event,
+        "User-Agent": "goBlink-Webhook/1.0",
+      },
+      body: payload,
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    responseStatus = response.status;
+    responseBody = await response.text().catch(() => null);
+  } catch (err) {
+    responseBody = err instanceof Error ? err.message : "Unknown error";
+  }
+
+  const isSuccess = responseStatus !== null && responseStatus >= 200 && responseStatus < 300;
+
+  // Update the pending retry row with the result
+  await supabase
+    .from("webhook_deliveries")
+    .update({
+      response_status: responseStatus,
+      response_body: responseBody?.slice(0, 1000) ?? null,
+      delivered_at: isSuccess ? new Date().toISOString() : null,
+    })
+    .eq("id", delivery.id);
+
+  // Queue next retry if still failing
+  if (!isSuccess && delivery.attempt < 3) {
+    await supabase.from("webhook_deliveries").insert({
+      webhook_endpoint_id: delivery.webhook_endpoint_id,
+      event: delivery.event,
+      payload: delivery.payload,
+      response_status: null,
+      response_body: null,
+      attempt: delivery.attempt + 1,
+      delivered_at: null,
+    });
+  }
+
+  return isSuccess;
 }
