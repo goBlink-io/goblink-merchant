@@ -20,6 +20,8 @@ import {
   LifeBuoy,
   FlaskConical,
   Plug,
+  FileText,
+  Store,
 } from "lucide-react";
 import { useTestModeContext } from "@/contexts/TestModeContext";
 import { useState, useEffect } from "react";
@@ -39,6 +41,16 @@ const navItems = [
     title: "Payment Links",
     href: "/dashboard/links",
     icon: Link2,
+  },
+  {
+    title: "Invoices",
+    href: "/dashboard/invoices",
+    icon: FileText,
+  },
+  {
+    title: "POS",
+    href: "/dashboard/pos",
+    icon: Store,
   },
   {
     title: "Support",
