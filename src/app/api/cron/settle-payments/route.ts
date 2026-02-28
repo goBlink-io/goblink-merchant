@@ -5,6 +5,7 @@ import { dispatchWebhooks } from "@/lib/webhooks";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
 import { insertNotification } from "@/lib/notifications";
+import { sendCustomerReceiptEmail } from "@/lib/email/customer-receipt";
 
 const FEE_RATE = 0.01; // 1%
 
@@ -107,6 +108,13 @@ export async function GET(request: NextRequest) {
           resourceId: payment.id,
           metadata: { feeAmount, netAmount, fulfillmentTxHash: fulfillmentTxHash ?? null },
         });
+
+        // P2-E: Send customer receipt email if customer_email is set
+        if (payment.customer_email) {
+          sendCustomerReceiptEmail(payment, fulfillmentTxHash ?? null).catch((err) => {
+            console.error(`[settle-payments] Failed to send customer receipt for ${payment.id}:`, err);
+          });
+        }
 
         results.settled++;
       } else if (status === "FAILED") {

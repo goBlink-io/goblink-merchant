@@ -25,6 +25,7 @@ export type AutoSendStatus =
 interface UseAutoSendOptions {
   paymentId: string;
   chainId: string;
+  customerEmail?: string; // P2-E: optional customer email for receipt
   onSuccess: (txHash: string) => void;
   onError: (error: string) => void;
 }
@@ -43,7 +44,7 @@ function isNativeToken(token: Token): boolean {
   );
 }
 
-export function useAutoSend({ paymentId, chainId, onSuccess, onError }: UseAutoSendOptions) {
+export function useAutoSend({ paymentId, chainId, customerEmail, onSuccess, onError }: UseAutoSendOptions) {
   const [status, setStatus] = useState<AutoSendStatus>("idle");
   const [txHash, setTxHash] = useState<string | null>(null);
 
@@ -102,6 +103,7 @@ export function useAutoSend({ paymentId, chainId, onSuccess, onError }: UseAutoS
             depositAddress,
             payerAddress: walletAddress,
             payerChain: chainId,
+            ...(customerEmail ? { customerEmail } : {}),
           }),
         });
 
@@ -124,7 +126,7 @@ export function useAutoSend({ paymentId, chainId, onSuccess, onError }: UseAutoS
         onError(message);
       }
     },
-    [walletAddress, sendTransactionAsync, writeContractAsync, paymentId, chainId, onSuccess, onError]
+    [walletAddress, sendTransactionAsync, writeContractAsync, paymentId, chainId, customerEmail, onSuccess, onError]
   );
 
   const reset = useCallback(() => {

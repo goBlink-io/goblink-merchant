@@ -29,6 +29,11 @@ import { getExplorerTxUrl } from "@/lib/explorer";
 import { useTokenBalances, getAutoSelectedToken, type TokenWithBalance } from "@/hooks/useTokenBalances";
 import { useChainBalances } from "@/hooks/useChainBalances";
 import { useAutoSend } from "@/hooks/useAutoSend";
+// P2-E: Checkout polish imports
+import PaymentReceipt from "@/components/checkout/PaymentReceipt";
+import CustomerEmailInput from "@/components/checkout/CustomerEmailInput";
+import MobileWalletConnect from "@/components/checkout/MobileWalletConnect";
+import QRPayment, { QRTabSwitcher } from "@/components/checkout/QRPayment";
 
 // Dynamic import Web3Provider to avoid SSR issues
 const Web3Provider = dynamic(
@@ -157,6 +162,16 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   const isTest = initialPayment.isTest === true;
   const [simulating, setSimulating] = useState(false);
   const [simError, setSimError] = useState<string | null>(null);
+
+  // P2-E: Customer email state
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [wantReceipt, setWantReceipt] = useState(true);
+
+  // P2-E: QR payment tab state
+  const [paymentTab, setPaymentTab] = useState<"wallet" | "qr">(
+    // Default to QR if no wallet connected
+    "wallet"
+  );
 
   const handleSimulate = async () => {
     setSimulating(true);
@@ -384,6 +399,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   } = useAutoSend({
     paymentId,
     chainId: selectedChain.id,
+    customerEmail: wantReceipt ? customerEmail : undefined, // P2-E
     onSuccess: () => {
       setStep("processing");
     },
@@ -456,15 +472,21 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
     setTxSubmitting(true);
 
     try {
+      // P2-E: Include customer email if provided
+      const completePayload: Record<string, string> = {
+        sendTxHash: txHash || "pending",
+        depositAddress,
+        payerAddress: walletAddress,
+        payerChain: selectedChain.id,
+      };
+      if (customerEmail && wantReceipt) {
+        completePayload.customerEmail = customerEmail;
+      }
+
       const res = await fetch(`/api/checkout/${paymentId}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sendTxHash: txHash || "pending",
-          depositAddress,
-          payerAddress: walletAddress,
-          payerChain: selectedChain.id,
-        }),
+        body: JSON.stringify(completePayload),
       });
 
       if (res.ok) {
@@ -576,51 +598,21 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
     return (
       <Card merchant={merchant} isTest={isTest}>
         <JourneyStepper current="done" />
-        <div className="flex flex-col items-center text-center py-8">
-          <div className="h-20 w-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-5 animate-in zoom-in duration-500">
-            <Check className="h-10 w-10 text-emerald-400" />
+        <div className="flex flex-col items-center text-center py-4">
+          <div className="h-16 w-16 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4 animate-in zoom-in duration-500">
+            <Check className="h-8 w-8 text-emerald-400" />
           </div>
           <h2 className="text-xl font-semibold text-zinc-100 mb-1">Payment Complete!</h2>
-          <p className="text-sm text-zinc-400 mb-1">
+          <p className="text-sm text-zinc-400 mb-4">
             {formatCurrency(payment.amount, payment.currency)} delivered to merchant
           </p>
-          <p className="text-xs text-zinc-500 mb-6">
-            The merchant has been notified of your payment.
-          </p>
-          {isTest && (
-            <div className="w-full mb-4 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
-              <p className="text-xs text-amber-400 text-center">
-                This was a test payment — no real funds were transferred
-              </p>
-            </div>
-          )}
-          {payment.fulfillmentTxHash && (
-            <div className="w-full p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/50 mb-4">
-              <p className="text-xs text-zinc-500 mb-1">Transaction</p>
-              {(() => {
-                const chain = payment.customerChain || merchant?.settlementChain;
-                const explorerUrl = chain
-                  ? getExplorerTxUrl(chain, payment.fulfillmentTxHash)
-                  : null;
-                return explorerUrl ? (
-                  <a
-                    href={explorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-mono text-blue-400 hover:text-blue-300 break-all inline-flex items-center gap-1"
-                  >
-                    {payment.fulfillmentTxHash}
-                    <ExternalLink className="h-3 w-3 shrink-0" />
-                  </a>
-                ) : (
-                  <p className="text-xs font-mono text-zinc-300 break-all">
-                    {payment.fulfillmentTxHash}
-                  </p>
-                );
-              })()}
-            </div>
-          )}
-          {payment.returnUrl && (
+        </div>
+
+        {/* P2-E: Payment receipt */}
+        <PaymentReceipt payment={payment} merchant={merchant} />
+
+        {payment.returnUrl && (
+          <div className="mt-4 text-center">
             <a
               href={payment.returnUrl}
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-medium hover:brightness-110 transition-all"
@@ -628,13 +620,8 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
               Return to merchant
               <ExternalLink className="h-4 w-4" />
             </a>
-          )}
-        </div>
-
-        <div className="flex items-center justify-center gap-1.5 mt-2 text-xs text-zinc-500">
-          <Shield className="h-3.5 w-3.5" />
-          Direct to merchant &middot; We never touch your funds
-        </div>
+          </div>
+        )}
       </Card>
     );
   }
@@ -783,7 +770,17 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
         </div>
       )}
 
-      <div className="mt-6 space-y-4">
+      {/* P2-E: Customer email input (optional receipt) */}
+      <div className="mt-4">
+        <CustomerEmailInput
+          value={customerEmail}
+          onChange={setCustomerEmail}
+          wantReceipt={wantReceipt}
+          onWantReceiptChange={setWantReceipt}
+        />
+      </div>
+
+      <div className="mt-4 space-y-4">
         {/* Chain selector with balances */}
         <ChainSelector
           chains={SUPPORTED_CHAINS}
@@ -883,15 +880,41 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
           </div>
         )}
 
+        {/* P2-E: QR code tab switcher (shown when deposit address available) */}
+        {depositAddress && quote?.amount_in && selectedToken && (
+          <>
+            <QRTabSwitcher activeTab={paymentTab} onTabChange={setPaymentTab} />
+            {paymentTab === "qr" && (
+              <QRPayment
+                depositAddress={depositAddress}
+                amount={quote.amount_in}
+                amountDisplay={`${formatTokenAmount(quote.amount_in, selectedToken.decimals)} ${selectedToken.symbol}`}
+                fiatAmount={payment.amount}
+                fiatCurrency={payment.currency}
+                tokenSymbol={selectedToken.symbol}
+                tokenAddress={selectedToken.address}
+                tokenDecimals={selectedToken.decimals}
+                isEvm={isEvmChain}
+                expiresAt={payment.expiresAt}
+              />
+            )}
+          </>
+        )}
+
         {/* Action button */}
         {!walletConnected ? (
-          <button
-            onClick={() => connectWallet(selectedChain.type)}
-            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-medium hover:brightness-110 transition-all flex items-center justify-center gap-2"
-          >
-            <Wallet className="h-4 w-4" />
-            Connect Wallet
-          </button>
+          <>
+            {/* P2-E: Mobile wallet deep-links */}
+            <MobileWalletConnect onFallbackConnect={() => connectWallet(selectedChain.type)} />
+
+            <button
+              onClick={() => connectWallet(selectedChain.type)}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-medium hover:brightness-110 transition-all flex items-center justify-center gap-2"
+            >
+              <Wallet className="h-4 w-4" />
+              Connect Wallet
+            </button>
+          </>
         ) : (
           <button
             onClick={handlePay}
