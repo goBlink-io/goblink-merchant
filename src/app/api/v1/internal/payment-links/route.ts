@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
+import { convertToUsd, getSupportedCurrencies } from "@/lib/forex";
 
 // POST — Create a payment link (session-authenticated)
 export async function POST(request: NextRequest) {
@@ -43,6 +44,26 @@ export async function POST(request: NextRequest) {
     return apiError("amount is required and must be a positive number", 400);
   }
 
+  // Handle multi-currency: convert to USD internally
+  const requestedCurrency = (currency || "USD").toUpperCase();
+  const supportedCurrencies = getSupportedCurrencies();
+  if (requestedCurrency !== "USD" && !supportedCurrencies.includes(requestedCurrency)) {
+    return apiError(`Unsupported currency: ${requestedCurrency}`, 400);
+  }
+
+  let amountUsd = Number(amount);
+  const linkMetadata: Record<string, unknown> = {
+    source: "payment_link",
+    ...(memo ? { memo } : {}),
+  };
+
+  if (requestedCurrency !== "USD") {
+    amountUsd = await convertToUsd(Number(amount), requestedCurrency);
+    amountUsd = Math.round(amountUsd * 100) / 100;
+    linkMetadata.original_currency = requestedCurrency;
+    linkMetadata.original_amount = Number(amount);
+  }
+
   const hours = expiresInHours && expiresInHours > 0 ? expiresInHours : 24;
   const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -51,12 +72,12 @@ export async function POST(request: NextRequest) {
 
   const paymentData = {
     merchant_id: merchant.id,
-    amount: Number(amount),
-    currency: (currency || merchant.currency || "USD").toUpperCase(),
+    amount: amountUsd,
+    currency: "USD",
     deposit_address: merchant.wallet_address,
     status: "pending" as const,
     expires_at: expiresAt,
-    metadata: memo ? { memo, source: "payment_link" } : { source: "payment_link" },
+    metadata: linkMetadata,
   };
 
   const { data: inserted, error: insertError } = await serviceClient
@@ -87,7 +108,13 @@ export async function POST(request: NextRequest) {
     action: "payment_link.created",
     resourceType: "payment",
     resourceId: payment.id,
-    metadata: { amount: Number(amount), currency: payment.currency },
+    metadata: {
+      amount: amountUsd,
+      currency: "USD",
+      ...(requestedCurrency !== "USD"
+        ? { original_amount: Number(amount), original_currency: requestedCurrency }
+        : {}),
+    },
     ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
   });
 

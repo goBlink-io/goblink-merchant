@@ -1064,12 +1064,29 @@ function Card({
 }
 
 function AmountHeader({ payment }: { payment: PaymentData }) {
+  const originalCurrency = payment.metadata?.original_currency as string | undefined;
+  const originalAmount = payment.metadata?.original_amount as number | undefined;
+  const showOriginal = originalCurrency && originalCurrency !== "USD" && originalAmount;
+
   return (
     <div className="text-center">
-      <p className="text-3xl font-bold text-zinc-50 tracking-tight">
-        {formatCurrency(payment.amount, payment.currency)}
-      </p>
-      <p className="text-sm text-zinc-400 mt-1">{payment.currency}</p>
+      {showOriginal ? (
+        <>
+          <p className="text-3xl font-bold text-zinc-50 tracking-tight">
+            {formatCurrency(originalAmount, originalCurrency)}
+          </p>
+          <p className="text-sm text-zinc-400 mt-1">
+            {formatCurrency(payment.amount, "USD")} USD
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="text-3xl font-bold text-zinc-50 tracking-tight">
+            {formatCurrency(payment.amount, payment.currency)}
+          </p>
+          <p className="text-sm text-zinc-400 mt-1">{payment.currency}</p>
+        </>
+      )}
     </div>
   );
 }

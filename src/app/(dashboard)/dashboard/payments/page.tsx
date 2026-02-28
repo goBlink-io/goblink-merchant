@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PaymentsList } from "@/components/dashboard/payments-list";
+import { getExchangeRate } from "@/lib/forex";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export default async function PaymentsPage({
 
   const { data: merchant } = await supabase
     .from("merchants")
-    .select("id, currency")
+    .select("id, currency, display_currency")
     .eq("user_id", user.id)
     .single();
 
@@ -51,6 +52,9 @@ export default async function PaymentsPage({
 
   const { data: payments, count } = await query;
 
+  const displayCurrency = merchant.display_currency || "USD";
+  const exchangeRate = await getExchangeRate(displayCurrency);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -74,6 +78,8 @@ export default async function PaymentsPage({
         currentPage={page}
         perPage={perPage}
         currency={merchant.currency}
+        displayCurrency={displayCurrency}
+        exchangeRate={exchangeRate}
         currentStatus={params.status || "all"}
         currentSearch={params.search || ""}
       />

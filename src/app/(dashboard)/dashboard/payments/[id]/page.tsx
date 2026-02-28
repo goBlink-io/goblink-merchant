@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { formatCurrency, formatDate, getStatusColor, truncateAddress } from "@/lib/utils";
 import { getExplorerTxUrl } from "@/lib/explorer";
+import { getExchangeRate } from "@/lib/forex";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -40,7 +41,7 @@ export default async function PaymentDetailPage({
 
   const { data: merchant } = await supabase
     .from("merchants")
-    .select("id")
+    .select("id, display_currency")
     .eq("user_id", user.id)
     .single();
 
@@ -54,6 +55,20 @@ export default async function PaymentDetailPage({
     .single();
 
   if (!payment) notFound();
+
+  const dc = merchant.display_currency || "USD";
+  const rate = await getExchangeRate(dc);
+  const showDc = dc !== "USD";
+
+  function fmtDc(amountUsd: number): string {
+    if (!showDc) return formatCurrency(amountUsd, "USD");
+    return formatCurrency(amountUsd * rate, dc);
+  }
+
+  function fmtUsdSub(amountUsd: number): string | null {
+    if (!showDc) return null;
+    return formatCurrency(amountUsd, "USD");
+  }
 
   // Fetch refunds for this payment
   const { data: refunds } = await supabase
@@ -132,18 +147,22 @@ export default async function PaymentDetailPage({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <DetailItem
-                  label="Amount"
-                  value={formatCurrency(Number(payment.amount), payment.currency)}
-                />
-                <DetailItem
-                  label="Net Amount"
-                  value={
-                    payment.net_amount
-                      ? formatCurrency(Number(payment.net_amount), payment.currency)
-                      : "--"
-                  }
-                />
+                <div>
+                  <p className="text-xs text-zinc-500 mb-0.5">Amount</p>
+                  <p className="text-sm text-white">{fmtDc(Number(payment.amount))}</p>
+                  {fmtUsdSub(Number(payment.amount)) && (
+                    <p className="text-xs text-zinc-500">{fmtUsdSub(Number(payment.amount))}</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 mb-0.5">Net Amount</p>
+                  <p className="text-sm text-white">
+                    {payment.net_amount ? fmtDc(Number(payment.net_amount)) : "--"}
+                  </p>
+                  {payment.net_amount && fmtUsdSub(Number(payment.net_amount)) && (
+                    <p className="text-xs text-zinc-500">{fmtUsdSub(Number(payment.net_amount))}</p>
+                  )}
+                </div>
                 <DetailItem
                   label="Fee"
                   value={
@@ -152,7 +171,7 @@ export default async function PaymentDetailPage({
                       : "--"
                   }
                 />
-                <DetailItem label="Currency" value={payment.currency} />
+                <DetailItem label="Currency" value={showDc ? `${dc} (internal: ${payment.currency})` : payment.currency} />
               </div>
 
               {payment.crypto_amount && (
@@ -239,7 +258,10 @@ export default async function PaymentDetailPage({
                     >
                       <div>
                         <p className="text-sm text-white">
-                          {formatCurrency(Number(refund.amount), refund.currency)}
+                          {fmtDc(Number(refund.amount))}
+                          {fmtUsdSub(Number(refund.amount)) && (
+                            <span className="text-xs text-zinc-500 ml-1">{fmtUsdSub(Number(refund.amount))}</span>
+                          )}
                         </p>
                         <p className="text-xs text-zinc-500">
                           {formatDate(refund.created_at)}

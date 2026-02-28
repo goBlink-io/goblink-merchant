@@ -35,12 +35,14 @@ import {
 } from "@/components/ui/collapsible";
 import { Key, Plus, Trash2, Globe, Webhook, Building2, AlertCircle, Play, RotateCw, ChevronDown, ChevronRight, Loader2, Bell, Palette } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { SUPPORTED_CURRENCIES } from "@/lib/forex";
 
 interface Merchant {
   id: string;
   business_name: string;
   country: string;
   currency: string;
+  display_currency: string;
   timezone: string;
   wallet_address: string | null;
   settlement_token: string;
@@ -123,7 +125,7 @@ export function SettingsContent({ merchant, apiKeys, webhooks, notificationPrefe
 function ProfileSettings({ merchant }: { merchant: Merchant }) {
   const [businessName, setBusinessName] = useState(merchant.business_name);
   const [country, setCountry] = useState(merchant.country);
-  const [currency, setCurrency] = useState(merchant.currency);
+  const [displayCurrency, setDisplayCurrency] = useState(merchant.display_currency || "USD");
   const [timezone, setTimezone] = useState(merchant.timezone);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -137,7 +139,7 @@ function ProfileSettings({ merchant }: { merchant: Merchant }) {
       .update({
         business_name: businessName,
         country,
-        currency,
+        display_currency: displayCurrency,
         timezone,
       })
       .eq("id", merchant.id);
@@ -187,20 +189,22 @@ function ProfileSettings({ merchant }: { merchant: Merchant }) {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="currency">Store Currency</Label>
-            <Select value={currency} onValueChange={setCurrency}>
+            <Label htmlFor="displayCurrency">Display Currency</Label>
+            <Select value={displayCurrency} onValueChange={setDisplayCurrency}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="USD">USD — US Dollar</SelectItem>
-                <SelectItem value="CAD">CAD — Canadian Dollar</SelectItem>
-                <SelectItem value="EUR">EUR — Euro</SelectItem>
-                <SelectItem value="GBP">GBP — British Pound</SelectItem>
-                <SelectItem value="AUD">AUD — Australian Dollar</SelectItem>
-                <SelectItem value="JPY">JPY — Japanese Yen</SelectItem>
+                {Object.entries(SUPPORTED_CURRENCIES).map(([code, info]) => (
+                  <SelectItem key={code} value={code}>
+                    {info.symbol} {code} — {info.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-zinc-500">
+              Display currency for your dashboard. Settlement is always in crypto.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="timezone">Timezone</Label>

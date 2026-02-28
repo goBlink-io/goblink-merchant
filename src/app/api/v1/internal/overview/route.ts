@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getExchangeRate } from "@/lib/forex";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
 
   const { data: merchant } = await supabase
     .from("merchants")
-    .select("id, business_name, currency, settlement_token, settlement_chain")
+    .select("id, business_name, currency, display_currency, settlement_token, settlement_chain")
     .eq("user_id", user.id)
     .single();
 
@@ -75,6 +76,10 @@ export async function GET(request: NextRequest) {
 
   const totalPayments = allConfirmed?.length ?? 0;
 
+  // Get exchange rate for display currency
+  const displayCurrency = merchant.display_currency || "USD";
+  const exchangeRate = await getExchangeRate(displayCurrency);
+
   return NextResponse.json({
     totalBalance,
     todayRevenue,
@@ -82,6 +87,8 @@ export async function GET(request: NextRequest) {
     totalPayments,
     recentPayments: recentPayments ?? [],
     currency: merchant.currency,
+    displayCurrency,
+    exchangeRate,
     settlementToken: merchant.settlement_token,
     settlementChain: merchant.settlement_chain,
     businessName: merchant.business_name,

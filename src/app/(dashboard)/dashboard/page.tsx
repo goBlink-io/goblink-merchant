@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { OverviewContent } from "@/components/dashboard/overview-content";
+import { getExchangeRate } from "@/lib/forex";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,10 @@ export default async function DashboardPage() {
 
   const totalPayments = allConfirmed?.length ?? 0;
 
+  // Get exchange rate for display currency
+  const displayCurrency = merchant.display_currency || "USD";
+  const exchangeRate = await getExchangeRate(displayCurrency);
+
   return (
     <OverviewContent
       data={{
@@ -74,6 +79,8 @@ export default async function DashboardPage() {
         totalPayments,
         recentPayments: recentPayments ?? [],
         currency: merchant.currency,
+        displayCurrency,
+        exchangeRate,
         settlementToken: merchant.settlement_token,
         settlementChain: merchant.settlement_chain,
         businessName: merchant.business_name,

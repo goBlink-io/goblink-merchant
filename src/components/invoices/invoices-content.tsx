@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { SUPPORTED_CURRENCIES } from "@/lib/forex";
 import {
   Plus,
   FileText,
@@ -420,6 +421,7 @@ function CreateInvoiceDialog({
   onCreated,
 }: CreateInvoiceDialogProps) {
   const [creating, setCreating] = useState(false);
+  const [invoiceCurrency, setInvoiceCurrency] = useState(currency);
   const [recipientName, setRecipientName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -481,7 +483,7 @@ function CreateInvoiceDialog({
           tax_rate: rate,
           due_date: dueDate || undefined,
           memo: memo || undefined,
-          currency,
+          currency: invoiceCurrency,
         }),
       });
 
@@ -541,8 +543,8 @@ function CreateInvoiceDialog({
             </div>
           </div>
 
-          {/* Due date + Memo */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Due date + Tax Rate + Currency */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Due Date</Label>
               <Input
@@ -562,6 +564,21 @@ function CreateInvoiceDialog({
                 onChange={(e) => setTaxRate(e.target.value)}
                 placeholder="0"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Currency</Label>
+              <Select value={invoiceCurrency} onValueChange={setInvoiceCurrency}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SUPPORTED_CURRENCIES).map(([code, info]) => (
+                    <SelectItem key={code} value={code}>
+                      {info.symbol} {code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -643,7 +660,7 @@ function CreateInvoiceDialog({
                     />
                   </div>
                   <div className="col-span-3 sm:col-span-2 text-sm text-zinc-300 text-right pr-2">
-                    {formatCurrency(amount, currency)}
+                    {formatCurrency(amount, invoiceCurrency)}
                   </div>
                   <div className="col-span-1">
                     <Button
@@ -667,20 +684,20 @@ function CreateInvoiceDialog({
             <div className="flex justify-between text-sm">
               <span className="text-zinc-400">Subtotal</span>
               <span className="text-white">
-                {formatCurrency(subtotal, currency)}
+                {formatCurrency(subtotal, invoiceCurrency)}
               </span>
             </div>
             {rate > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-400">Tax ({rate}%)</span>
                 <span className="text-white">
-                  {formatCurrency(taxAmount, currency)}
+                  {formatCurrency(taxAmount, invoiceCurrency)}
                 </span>
               </div>
             )}
             <div className="flex justify-between text-base font-semibold">
               <span className="text-white">Total</span>
-              <span className="text-white">{formatCurrency(total, currency)}</span>
+              <span className="text-white">{formatCurrency(total, invoiceCurrency)}</span>
             </div>
           </div>
         </div>
