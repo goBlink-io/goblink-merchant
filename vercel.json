@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/retry-webhooks",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/refresh-rates",
+      "schedule": "0 * * * *"
     }
   ]
 }

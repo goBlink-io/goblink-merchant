@@ -41,8 +41,17 @@ interface PaymentsListProps {
   currentPage: number;
   perPage: number;
   currency: string;
+  displayCurrency: string;
+  exchangeRate: number;
   currentStatus: string;
   currentSearch: string;
+}
+
+function formatConverted(amountUsd: number, displayCurrency: string, exchangeRate: number): string {
+  if (displayCurrency === "USD" || exchangeRate === 1) {
+    return formatCurrency(amountUsd, "USD");
+  }
+  return formatCurrency(amountUsd * exchangeRate, displayCurrency);
 }
 
 const statusOptions = [
@@ -61,6 +70,8 @@ export function PaymentsList({
   currentPage,
   perPage,
   currency,
+  displayCurrency,
+  exchangeRate,
   currentStatus,
   currentSearch,
 }: PaymentsListProps) {
@@ -182,8 +193,13 @@ export function PaymentsList({
                   </Link>
                   <Link href={`/dashboard/payments/${payment.id}`} className="col-span-2">
                     <span className="text-sm font-medium text-white">
-                      {formatCurrency(Number(payment.amount), payment.currency)}
+                      {formatConverted(Number(payment.amount), displayCurrency, exchangeRate)}
                     </span>
+                    {displayCurrency !== "USD" && (
+                      <span className="text-xs text-zinc-500 block">
+                        {formatCurrency(Number(payment.amount), "USD")}
+                      </span>
+                    )}
                   </Link>
                   <Link href={`/dashboard/payments/${payment.id}`} className="col-span-2">
                     {payment.crypto_amount ? (

@@ -3,6 +3,7 @@ import { validateApiKey } from "@/lib/api-auth";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { dispatchWebhooks } from "@/lib/webhooks";
+import { convertToUsd, getSupportedCurrencies } from "@/lib/forex";
 
 // POST /api/v1/payments — Create a payment
 export async function POST(request: NextRequest) {
@@ -44,20 +45,37 @@ export async function POST(request: NextRequest) {
     return apiError("Merchant not found", 404);
   }
 
+  // Handle multi-currency: if currency is not USD, convert to USD for internal storage
+  const requestedCurrency = (currency || "USD").toUpperCase();
+  const supportedCurrencies = getSupportedCurrencies();
+  if (requestedCurrency !== "USD" && !supportedCurrencies.includes(requestedCurrency)) {
+    return apiError(`Unsupported currency: ${requestedCurrency}. Supported: ${supportedCurrencies.join(", ")}`, 400);
+  }
+
+  let amountUsd = Number(amount);
+  const paymentMetadata: Record<string, unknown> = { ...(metadata || {}) };
+
+  if (requestedCurrency !== "USD") {
+    amountUsd = await convertToUsd(Number(amount), requestedCurrency);
+    amountUsd = Math.round(amountUsd * 100) / 100; // Round to 2 decimal places
+    paymentMetadata.original_currency = requestedCurrency;
+    paymentMetadata.original_amount = Number(amount);
+  }
+
   const expiresAt = expiresInMinutes
     ? new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString()
     : new Date(Date.now() + 60 * 60 * 1000).toISOString(); // Default 1 hour
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-  // Insert payment first, then update with payment_url containing the generated ID
+  // Insert payment — amount is always in USD internally
   const paymentData = {
     merchant_id: auth.merchantId,
-    amount: Number(amount),
-    currency: (currency || merchant.currency || "USD").toUpperCase(),
+    amount: amountUsd,
+    currency: "USD",
     external_order_id: orderId || null,
     return_url: returnUrl || null,
-    metadata: metadata || {},
+    metadata: paymentMetadata,
     deposit_address: merchant.wallet_address,
     status: "pending" as const,
     expires_at: expiresAt,
@@ -98,6 +116,12 @@ export async function POST(request: NextRequest) {
       currency: payment.currency,
       orderId: payment.external_order_id,
       status: payment.status,
+      ...(requestedCurrency !== "USD"
+        ? {
+            originalAmount: Number(amount),
+            originalCurrency: requestedCurrency,
+          }
+        : {}),
     },
   });
 
@@ -113,6 +137,12 @@ export async function POST(request: NextRequest) {
       expiresAt: payment.expires_at,
       createdAt: payment.created_at,
       isTest: payment.is_test,
+      ...(requestedCurrency !== "USD"
+        ? {
+            originalAmount: Number(amount),
+            originalCurrency: requestedCurrency,
+          }
+        : {}),
     },
     201
   );
@@ -170,6 +200,7 @@ export async function GET(request: NextRequest) {
 }
 
 function formatPaymentResponse(p: Record<string, unknown>) {
+  const meta = p.metadata as Record<string, unknown> | null;
   return {
     id: p.id,
     amount: p.amount,
@@ -195,5 +226,11 @@ function formatPaymentResponse(p: Record<string, unknown>) {
     createdAt: p.created_at,
     updatedAt: p.updated_at,
     isTest: p.is_test,
+    ...(meta?.original_currency
+      ? {
+          originalAmount: meta.original_amount,
+          originalCurrency: meta.original_currency,
+        }
+      : {}),
   };
 }

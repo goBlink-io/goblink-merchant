@@ -23,9 +23,27 @@ interface OverviewData {
     is_test: boolean;
   }>;
   currency: string;
+  displayCurrency: string;
+  exchangeRate: number;
   settlementToken: string;
   settlementChain: string;
   businessName: string;
+}
+
+function formatConverted(amountUsd: number, displayCurrency: string, exchangeRate: number): string {
+  if (displayCurrency === "USD" || exchangeRate === 1) {
+    return formatCurrency(amountUsd, "USD");
+  }
+  return formatCurrency(amountUsd * exchangeRate, displayCurrency);
+}
+
+function UsdSecondary({ amountUsd, displayCurrency }: { amountUsd: number; displayCurrency: string }) {
+  if (displayCurrency === "USD") return null;
+  return (
+    <span className="text-xs text-zinc-500 ml-1">
+      ({formatCurrency(amountUsd, "USD")})
+    </span>
+  );
 }
 
 export function OverviewContent({ data }: { data: OverviewData }) {
@@ -44,6 +62,9 @@ export function OverviewContent({ data }: { data: OverviewData }) {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [isTestMode]);
+
+  const dc = filtered.displayCurrency || "USD";
+  const rate = filtered.exchangeRate || 1;
 
   return (
     <div className="space-y-8">
@@ -67,9 +88,10 @@ export function OverviewContent({ data }: { data: OverviewData }) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white">
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrency(filtered.totalBalance, filtered.currency)}
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatConverted(filtered.totalBalance, dc, rate)}
             </div>
             <p className="text-xs text-zinc-500 mt-1">
+              {dc !== "USD" && !loading && <>{formatCurrency(filtered.totalBalance, "USD")} &middot; </>}
               {filtered.settlementToken} on {filtered.settlementChain}
             </p>
           </CardContent>
@@ -84,9 +106,10 @@ export function OverviewContent({ data }: { data: OverviewData }) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-white">
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrency(filtered.todayRevenue, filtered.currency)}
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatConverted(filtered.todayRevenue, dc, rate)}
             </div>
             <p className="text-xs text-zinc-500 mt-1">
+              {dc !== "USD" && !loading && <>{formatCurrency(filtered.todayRevenue, "USD")} &middot; </>}
               Confirmed payments today
             </p>
           </CardContent>
@@ -191,7 +214,8 @@ export function OverviewContent({ data }: { data: OverviewData }) {
                       {payment.status}
                     </Badge>
                     <span className="text-sm font-medium text-white">
-                      {formatCurrency(Number(payment.amount), payment.currency)}
+                      {formatConverted(Number(payment.amount), dc, rate)}
+                      <UsdSecondary amountUsd={Number(payment.amount)} displayCurrency={dc} />
                     </span>
                   </div>
                 </Link>

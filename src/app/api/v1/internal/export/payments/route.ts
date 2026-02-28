@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getExchangeRate, formatCurrencyAmount } from "@/lib/forex";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   const { data: merchant } = await supabase
     .from("merchants")
-    .select("id, currency")
+    .select("id, currency, display_currency")
     .eq("user_id", user.id)
     .single();
 
@@ -54,9 +55,22 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const dc = merchant.display_currency || "USD";
+  const rate = await getExchangeRate(dc);
+  const showDc = dc !== "USD";
+
   if (format === "json") {
+    const enriched = (payments ?? []).map((p) => ({
+      ...p,
+      ...(showDc
+        ? {
+            display_amount: formatCurrencyAmount(Number(p.amount) * rate, dc),
+            display_currency: dc,
+          }
+        : {}),
+    }));
     const filename = `payments-${startDate || "all"}-${endDate || "now"}.json`;
-    return new NextResponse(JSON.stringify(payments, null, 2), {
+    return new NextResponse(JSON.stringify(enriched, null, 2), {
       headers: {
         "Content-Type": "application/json",
         "Content-Disposition": `attachment; filename="${filename}"`,
@@ -68,7 +82,8 @@ export async function GET(request: NextRequest) {
   const headers = [
     "Payment ID",
     "Date",
-    "Amount",
+    "Amount (USD)",
+    ...(showDc ? [`Amount (${dc})`] : []),
     "Currency",
     "Token",
     "Chain",
@@ -82,6 +97,7 @@ export async function GET(request: NextRequest) {
     p.id,
     new Date(p.created_at).toISOString(),
     p.amount,
+    ...(showDc ? [formatCurrencyAmount(Number(p.amount) * rate, dc)] : []),
     p.currency,
     p.crypto_token || "",
     p.crypto_chain || "",
