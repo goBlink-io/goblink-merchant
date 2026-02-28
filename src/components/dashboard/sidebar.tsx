@@ -25,6 +25,7 @@ import {
   Activity,
   Download,
   RotateCcw,
+  Wallet,
 } from "lucide-react";
 import { useTestModeContext } from "@/contexts/TestModeContext";
 import { useState, useEffect } from "react";
@@ -79,6 +80,11 @@ const navItems = [
     title: "Export",
     href: "/dashboard/export",
     icon: Download,
+  },
+  {
+    title: "Settlement",
+    href: "/dashboard/settings/settlement",
+    icon: Wallet,
   },
   {
     title: "Settings",

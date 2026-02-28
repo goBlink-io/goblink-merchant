@@ -57,6 +57,7 @@
     "starknet": "^9.2.1",
     "starknetkit": "^3.4.3",
     "tailwind-merge": "^3.5.0",
+    "thirdweb": "^5.119.0",
     "tronweb": "^6.2.1",
     "uuid": "^13.0.0",
     "viem": "^2.46.3",
