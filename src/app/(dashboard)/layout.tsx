@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 import { ChatWrapper } from "@/components/chatbot/chat-wrapper";
 import { TestModeProvider } from "@/contexts/TestModeContext";
 import { TestModeBar } from "@/components/dashboard/test-mode-bar";
+import { NotificationBell } from "@/components/dashboard/notification-bell";
 
 export default async function DashboardLayout({
   children,
@@ -35,6 +36,10 @@ export default async function DashboardLayout({
         <main className="lg:pl-64 transition-all duration-300">
           {/* Test mode top bar indicator */}
           <TestModeBar />
+          {/* Notification bell — top right */}
+          <div className="fixed top-4 right-4 z-40 lg:right-8">
+            <NotificationBell />
+          </div>
           <div className="p-4 pt-20 lg:pt-8 lg:p-8 max-w-7xl mx-auto">
             {children}
           </div>

@@ -1038,8 +1038,26 @@ function Card({
         </div>
       )}
 
-      <div className="rounded-2xl bg-zinc-900/80 border border-zinc-800/80 p-6 shadow-xl backdrop-blur-sm">
+      <div
+        className="rounded-2xl bg-zinc-900/80 border border-zinc-800/80 p-6 shadow-xl backdrop-blur-sm"
+        style={
+          merchant?.brandColor
+            ? { borderTopColor: merchant.brandColor, borderTopWidth: "2px" }
+            : undefined
+        }
+      >
         {children}
+      </div>
+
+      {/* Powered by goBlink footer */}
+      <div className="flex items-center justify-center gap-1.5 mt-4 text-xs text-zinc-600">
+        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
+        </svg>
+        Powered by{" "}
+        <span className="font-semibold bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
+          goBlink
+        </span>
       </div>
     </div>
   );
