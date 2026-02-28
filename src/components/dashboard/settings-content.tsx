@@ -33,7 +33,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Key, Plus, Trash2, Globe, Webhook, Building2, AlertCircle, Play, RotateCw, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { Key, Plus, Trash2, Globe, Webhook, Building2, AlertCircle, Play, RotateCw, ChevronDown, ChevronRight, Loader2, Bell } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 interface Merchant {
@@ -65,13 +65,22 @@ interface WebhookEndpoint {
   created_at: string;
 }
 
+interface NotificationPreferences {
+  payment_received: boolean;
+  payment_failed: boolean;
+  ticket_reply: boolean;
+  withdrawal_complete: boolean;
+  weekly_summary: boolean;
+}
+
 interface SettingsContentProps {
   merchant: Merchant;
   apiKeys: ApiKey[];
   webhooks: WebhookEndpoint[];
+  notificationPreferences: NotificationPreferences;
 }
 
-export function SettingsContent({ merchant, apiKeys, webhooks }: SettingsContentProps) {
+export function SettingsContent({ merchant, apiKeys, webhooks, notificationPreferences }: SettingsContentProps) {
   return (
     <Tabs defaultValue="profile" className="space-y-6">
       <TabsList>
@@ -79,6 +88,7 @@ export function SettingsContent({ merchant, apiKeys, webhooks }: SettingsContent
         <TabsTrigger value="payments">Payment Preferences</TabsTrigger>
         <TabsTrigger value="api">API Keys</TabsTrigger>
         <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+        <TabsTrigger value="notifications">Notifications</TabsTrigger>
       </TabsList>
 
       <TabsContent value="profile">
@@ -95,6 +105,10 @@ export function SettingsContent({ merchant, apiKeys, webhooks }: SettingsContent
 
       <TabsContent value="webhooks">
         <WebhookSettings merchantId={merchant.id} webhooks={webhooks} />
+      </TabsContent>
+
+      <TabsContent value="notifications">
+        <NotificationSettings merchantId={merchant.id} preferences={notificationPreferences} />
       </TabsContent>
     </Tabs>
   );
@@ -887,6 +901,113 @@ function WebhookSettings({
             ))}
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+const NOTIFICATION_OPTIONS: {
+  key: keyof NotificationPreferences;
+  label: string;
+  description: string;
+}[] = [
+  {
+    key: "payment_received",
+    label: "Payment received",
+    description: "Get notified when a payment is confirmed on-chain.",
+  },
+  {
+    key: "payment_failed",
+    label: "Payment failed",
+    description: "Get notified when a payment fails or expires.",
+  },
+  {
+    key: "ticket_reply",
+    label: "Ticket replies",
+    description: "Get notified when an admin replies to your support ticket.",
+  },
+  {
+    key: "withdrawal_complete",
+    label: "Withdrawal complete",
+    description: "Get notified when a withdrawal finishes processing.",
+  },
+  {
+    key: "weekly_summary",
+    label: "Weekly summary",
+    description: "Receive a weekly email summarizing your revenue and activity.",
+  },
+];
+
+function NotificationSettings({
+  merchantId,
+  preferences,
+}: {
+  merchantId: string;
+  preferences: NotificationPreferences;
+}) {
+  const [prefs, setPrefs] = useState<NotificationPreferences>(preferences);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
+
+  function togglePref(key: keyof NotificationPreferences) {
+    setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const { error } = await supabase
+      .from("merchants")
+      .update({ notification_preferences: prefs })
+      .eq("id", merchantId);
+
+    setSaving(false);
+    if (!error) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      router.refresh();
+    }
+  }
+
+  return (
+    <Card id="notifications">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Bell className="h-5 w-5 text-zinc-400" />
+          Email Notifications
+        </CardTitle>
+        <CardDescription>
+          Choose which email notifications you&apos;d like to receive.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-4">
+          {NOTIFICATION_OPTIONS.map((opt) => (
+            <div
+              key={opt.key}
+              className="flex items-center justify-between py-3 px-4 rounded-lg bg-zinc-800/30 border border-zinc-800"
+            >
+              <div>
+                <p className="text-sm font-medium text-white">{opt.label}</p>
+                <p className="text-xs text-zinc-500 mt-0.5">{opt.description}</p>
+              </div>
+              <Switch
+                checked={prefs[opt.key]}
+                onCheckedChange={() => togglePref(opt.key)}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : "Save Preferences"}
+          </Button>
+          {saved && (
+            <span className="text-sm text-emerald-400">Preferences saved!</span>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

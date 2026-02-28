@@ -137,6 +137,9 @@ importers:
       recharts:
         specifier: ^3.7.0
         version: 3.7.0(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react-is@18.3.1)(react@19.2.4)(redux@5.0.1)
+      resend:
+        specifier: ^6.9.3
+        version: 6.9.3
       starknet:
         specifier: ^9.2.1
         version: 9.2.1(typescript@5.9.3)(zod@3.25.76)
@@ -2540,6 +2543,9 @@ packages:
   '@solana/web3.js@1.98.4':
     resolution: {integrity: sha512-vv9lfnvjUsRiq//+j5pBdXig0IQdtzA0BRZ3bXEP4KaIyF1CcaydWqgyzQgfZMNIsWNWmG+AUHwPy4AHOD6gpw==}
 
+  '@stablelib/base64@1.0.1':
+    resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
+
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
@@ -4574,6 +4580,9 @@ packages:
     resolution: {integrity: sha512-dwsoQlS7h9hMeYUq1W++23NDcBLV4KqONnITDV9DjfS3q1SgDGVrBdvvTLUotWtPSD7asWDV9/CmsZPy8Hf70A==}
     engines: {node: '>=6'}
 
+  fast-sha256@1.3.0:
+    resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
+
   fast-stable-stringify@1.0.0:
     resolution: {integrity: sha512-wpYMUmFu5f00Sm0cj2pfivpmawLZ0NKdviQ4w9zJeR8JVtOpOxHmLaJuj0vxvGqMJQWyP/COUkF75/57OKyRag==}
 
@@ -6136,6 +6145,9 @@ packages:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
     engines: {node: '>= 0.4'}
 
+  postal-mime@2.7.3:
+    resolution: {integrity: sha512-MjhXadAJaWgYzevi46+3kLak8y6gbg0ku14O1gO/LNOuay8dO+1PtcSGvAdgDR0DoIsSaiIA8y/Ddw6MnrO0Tw==}
+
   postcss@8.4.31:
     resolution: {integrity: sha512-PS08Iboia9mts/2ygV3eLpY5ghnUcfLV/EXTOW1E2qYxJKGGBUtNjN76FYHnMs36RmARn41bC0AZmn+rR0OVpQ==}
     engines: {node: ^10 || ^12 || >=14}
@@ -6488,6 +6500,15 @@ packages:
   reselect@5.1.1:
     resolution: {integrity: sha512-K/BG6eIky/SBpzfHZv/dd+9JBFiS4SWV7FIujVyJRux6e45+73RaUHXLmIR1f7WOMaQ0U1km6qwklRQxpJJY0w==}
 
+  resend@6.9.3:
+    resolution: {integrity: sha512-GRXjH9XZBJA+daH7bBVDuTShr22iWCxXA8P7t495G4dM/RC+d+3gHBK/6bz9K6Vpcq11zRQKmD+B+jECwQlyGQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@react-email/render': '*'
+    peerDependenciesMeta:
+      '@react-email/render':
+        optional: true
+
   resize-observer-polyfill@1.5.1:
     resolution: {integrity: sha512-LwZrotdHOo12nQuZlHEmtuXdqGoOD0OhaxopaNFxWzInpEgaLWoVuAMbTzixuosCx2nEG58ngzW3vxdWoxIgdg==}
 
@@ -6754,6 +6775,9 @@ packages:
     resolution: {integrity: sha512-WjlahMgHmCJpqzU8bIBy4qtsZdU9lRlcZE3Lvyej6t4tuOuv1vk57OW3MBrj6hXBFx/nNoC9MPMTcr5YA7NQbg==}
     engines: {node: '>=6'}
 
+  standardwebhooks@1.0.0:
+    resolution: {integrity: sha512-BbHGOQK9olHPMvQNHWul6MYlrRTAOKn03rOe4A8O3CLWhNf4YHBqq2HJKKC+sfqpxiBY52pNeesD6jIiLDz8jg==}
+
   starknet@8.9.2:
     resolution: {integrity: sha512-+dp+o2w67fV6JyVOVkYeM1Ec71aORHc/JrF4VHLlfeGee0nLilooCQLE2u6hUcSGQG2x2/fvzkxYpIN+k1JBvA==}
     engines: {node: '>=22'}
@@ -6891,6 +6915,9 @@ packages:
 
   svelte-forms@2.3.1:
     resolution: {integrity: sha512-ExX9PM0JgvdOWlHl2ztD7XzLNPOPt9U5hBKV8sUAisMfcYWpPRnyz+6EFmh35BOBGJJmuhTDBGm5/7seLjOTIA==}
+
+  svix@1.84.1:
+    resolution: {integrity: sha512-K8DPPSZaW/XqXiz1kEyzSHYgmGLnhB43nQCMeKjWGCUpLIpAMMM8kx3rVVOSm6Bo6EHyK1RQLPT4R06skM/MlQ==}
 
   swr@1.3.0:
     resolution: {integrity: sha512-dkghQrOl2ORX9HYrMDtPa7LTVHJjCTeZoB1dqTbnnEDlSvN8JEKpYIYurDfvbQFUUS8Cg8PceFVZNkW0KNNYPw==}
@@ -7239,6 +7266,10 @@ packages:
   utils-merge@1.0.1:
     resolution: {integrity: sha512-pMZTvIkT1d+TFGvDOqodOclx0QWkkgi6Tdoa8gC8ffGAAqz9pzPTZWAybbsHHoED/ztMtkv/VoYTYyShUn81hA==}
     engines: {node: '>= 0.4.0'}
+
+  uuid@10.0.0:
+    resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
+    hasBin: true
 
   uuid@13.0.0:
     resolution: {integrity: sha512-XQegIaBTVUjSHliKqcnFqYypAd4S+WCYt5NIeRs6w/UAry7z8Y9j5ZwRRL4kzq9U3sD6v+85er9FvkEaBpji2w==}
@@ -11605,6 +11636,8 @@ snapshots:
       - typescript
       - utf-8-validate
 
+  '@stablelib/base64@1.0.1': {}
+
   '@standard-schema/spec@1.1.0': {}
 
   '@standard-schema/utils@0.3.0': {}
@@ -14831,6 +14864,8 @@ snapshots:
 
   fast-redact@3.5.0: {}
 
+  fast-sha256@1.3.0: {}
+
   fast-stable-stringify@1.0.0: {}
 
   fastest-levenshtein@1.0.16: {}
@@ -16795,6 +16830,8 @@ snapshots:
 
   possible-typed-array-names@1.1.0: {}
 
+  postal-mime@2.7.3: {}
+
   postcss@8.4.31:
     dependencies:
       nanoid: 3.3.11
@@ -17227,6 +17264,11 @@ snapshots:
 
   reselect@5.1.1: {}
 
+  resend@6.9.3:
+    dependencies:
+      postal-mime: 2.7.3
+      svix: 1.84.1
+
   resize-observer-polyfill@1.5.1: {}
 
   resolve-alpn@1.2.1: {}
@@ -17536,6 +17578,11 @@ snapshots:
     dependencies:
       type-fest: 0.7.1
 
+  standardwebhooks@1.0.0:
+    dependencies:
+      '@stablelib/base64': 1.0.1
+      fast-sha256: 1.3.0
+
   starknet@8.9.2:
     dependencies:
       '@noble/curves': 1.7.0
@@ -17782,6 +17829,11 @@ snapshots:
   svelte-forms@2.3.1:
     dependencies:
       is-promise: 4.0.0
+
+  svix@1.84.1:
+    dependencies:
+      standardwebhooks: 1.0.0
+      uuid: 10.0.0
 
   swr@1.3.0(react@19.2.4):
     dependencies:
@@ -18096,6 +18148,8 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   utils-merge@1.0.1: {}
+
+  uuid@10.0.0: {}
 
   uuid@13.0.0: {}
 

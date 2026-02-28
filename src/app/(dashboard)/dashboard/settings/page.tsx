@@ -43,6 +43,13 @@ export default async function SettingsPage() {
         merchant={merchant}
         apiKeys={apiKeys ?? []}
         webhooks={webhooks ?? []}
+        notificationPreferences={merchant.notification_preferences ?? {
+          payment_received: true,
+          payment_failed: true,
+          ticket_reply: true,
+          withdrawal_complete: true,
+          weekly_summary: false,
+        }}
       />
     </div>
   );
