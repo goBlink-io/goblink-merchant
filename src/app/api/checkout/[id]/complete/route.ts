@@ -40,11 +40,12 @@ export async function POST(
     return withCors(request, apiError("Invalid JSON body", 400));
   }
 
-  const { sendTxHash, depositAddress, payerAddress, payerChain } = body as {
+  const { sendTxHash, depositAddress, payerAddress, payerChain, customerEmail } = body as {
     sendTxHash: string;
     depositAddress: string;
     payerAddress: string;
     payerChain: string;
+    customerEmail?: string;
   };
 
   if (!sendTxHash || !payerAddress || !payerChain) {
@@ -78,15 +79,22 @@ export async function POST(
     return withCors(request, apiError("depositAddress does not match the existing deposit address for this payment", 400));
   }
 
+  // P2-E: Store customer email if provided (for receipt delivery)
+  const updatePayload: Record<string, unknown> = {
+    status: "processing",
+    customer_wallet: payerAddress,
+    customer_chain: payerChain,
+    send_tx_hash: sendTxHash,
+    deposit_address: depositAddress,
+  };
+
+  if (customerEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+    updatePayload.customer_email = customerEmail;
+  }
+
   const { data: updated, error } = await supabase
     .from("payments")
-    .update({
-      status: "processing",
-      customer_wallet: payerAddress,
-      customer_chain: payerChain,
-      send_tx_hash: sendTxHash,
-      deposit_address: depositAddress,
-    })
+    .update(updatePayload)
     .eq("id", id)
     .eq("status", "pending") // Idempotency guard
     .select("id, amount, currency, status")
