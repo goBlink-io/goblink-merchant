@@ -168,3 +168,46 @@
 - Submit to WordPress.org plugin directory
 - Direct download from goblink.io/woocommerce as fallback
 - Separate repo: github.com/Urban-Blazer/goblink-woocommerce
+
+---
+
+## Phase I: On/Offramp Research & Integration
+*Let merchants cash out to fiat. Let customers buy crypto to pay.*
+
+**I1. Research Sprint (before building anything)**
+
+Key providers to evaluate:
+
+| Provider | Type | Coverage | Notes |
+|---|---|---|---|
+| **Onramper** | Aggregator (30+ providers) | 160+ countries | Single API → best rate routing. Already in PLAN.md as scaling play. Likely our primary choice. |
+| **Transak** | Direct | 136 tokens, 64 countries | Simple widget integration. Good KYC handling. Popular with Web3 devs. |
+| **MoonPay** | Direct | 160+ countries | One API for both on + offramp. Strong brand trust. Higher fees. |
+| **Ramp Network** | Direct | 150+ countries | Low fees, good UX. No markup on rates (unlike MoonPay). |
+| **Coinbase Onramp** | Direct | US-heavy | Free to integrate. ACH support. Best for US merchants cashing out. |
+| **Shakepay** | Direct | Canada only | Best for CAD offramp. No API — manual withdrawal via Shakepay account. |
+| **Stripe Crypto Offramp** | Direct | US only | Stripe integration for USDC → USD. Familiar to merchants already using Stripe. |
+| **1Click (NEAR Intents)** | Cross-chain settlement | 26+ chains | Already integrated. Can route to exchange addresses for manual offramp. |
+
+**Research questions to answer:**
+- Which providers support Canadian merchants (FIPPA-adjacent, Shakepay partnership)?
+- Onramper aggregator vs direct Transak — fee comparison at our volume tier
+- KYC handled by provider or do we need to collect?
+- Can we embed their widget inside our dashboard or do we redirect?
+- Which support USDC on Base (our primary settlement token)?
+- Stripe Crypto Offramp viability for merchants already on Stripe
+
+**I2. Offramp Integration (merchant withdrawal)**
+- Merchant hits "Withdraw" in dashboard → chooses provider → redirected to hosted widget
+- Provider handles KYC, bank rails, FX conversion
+- We receive webhook on completion, update withdrawal record
+- v1: manual provider selection per merchant
+- v2: Onramper aggregator (best rate auto-routing)
+
+**I3. Onramp Integration (customer buy crypto to pay)**
+- On checkout page (`/pay/[id]`): "Don't have crypto? Buy it here" button
+- Opens Transak or Ramp widget → customer buys USDC → funds arrive at deposit address
+- Seamless flow: buy → pay → done (no wallet required for customer)
+- This is the **Web2 merchant unlock** — customers don't need existing crypto
+
+*Decision: Research first (I1), then build I2 (offramp) before I3 (onramp). Merchants getting paid out matters more than customer onramp UX.*
