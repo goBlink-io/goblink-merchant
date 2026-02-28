@@ -42,6 +42,13 @@ export default function SignupPage() {
       return;
     }
 
+    // Send our branded verification email (fire and forget)
+    fetch("/api/auth/send-verification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, businessName }),
+    }).catch(() => {});
+
     setSuccess(true);
     setLoading(false);
   }

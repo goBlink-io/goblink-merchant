@@ -22,6 +22,7 @@ import {
   Menu,
   Shield,
   Ticket,
+  Mail,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -32,6 +33,7 @@ const navItems = [
   { title: "Revenue", href: "/admin/revenue", icon: DollarSign },
   { title: "Analytics", href: "/admin/analytics", icon: BarChart3 },
   { title: "Tickets", href: "/admin/tickets", icon: Ticket },
+  { title: "Templates", href: "/admin/templates", icon: Mail },
   { title: "Issues", href: "/admin/issues", icon: AlertTriangle },
   { title: "System", href: "/admin/system", icon: Server },
 ];

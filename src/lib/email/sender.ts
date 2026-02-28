@@ -24,12 +24,86 @@ interface NotificationPreferences {
   weekly_summary: boolean;
 }
 
-interface TemplateResult {
+export interface EmailTemplate {
+  id: string;
+  type: string;
+  name: string;
+  subject: string;
+  body_html: string;
+  body_text: string;
+  variables: Array<{ name: string; description: string }>;
+  is_active: boolean;
+  updated_at: string;
+  created_at: string;
+}
+
+// Simple in-process cache for DB templates (5 min TTL)
+const templateCache = new Map<string, { template: EmailTemplate; fetchedAt: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Fetch a template from the email_templates table.
+ * Cached for 5 minutes per type. Returns null if not found.
+ */
+export async function getTemplate(type: string): Promise<EmailTemplate | null> {
+  const cached = templateCache.get(type);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    return cached.template;
+  }
+
+  try {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("email_templates")
+      .select("*")
+      .eq("type", type)
+      .eq("is_active", true)
+      .single();
+
+    if (error || !data) {
+      console.warn("[email] DB template not found for type:", type);
+      return null;
+    }
+
+    const template = data as EmailTemplate;
+    templateCache.set(type, { template, fetchedAt: Date.now() });
+    return template;
+  } catch (err) {
+    console.error("[email] Failed to fetch template:", type, err);
+    return null;
+  }
+}
+
+/**
+ * Replace all {{variable}} placeholders with actual values.
+ * Strips any unreplaced {{variables}}.
+ */
+export function renderTemplate(html: string, variables: Record<string, string>): string {
+  let result = html;
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.replaceAll(`{{${key}}}`, value);
+  }
+  // Strip unreplaced placeholders
+  result = result.replace(/\{\{[a-zA-Z_]+\}\}/g, "");
+  return result;
+}
+
+/** Clear the template cache (useful after admin edits) */
+export function clearTemplateCache(): void {
+  templateCache.clear();
+}
+
+interface ReactTemplateResult {
   subject: string;
   react: React.ReactElement;
 }
 
-function buildTemplate(type: NotificationType, data: Record<string, unknown>): TemplateResult {
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://merchant.goblink.io";
+
+/**
+ * Build a React-based template as fallback when DB template is unavailable.
+ */
+function buildFallbackTemplate(type: NotificationType, data: Record<string, unknown>): ReactTemplateResult {
   switch (type) {
     case "welcome":
       return {
@@ -112,8 +186,91 @@ function buildTemplate(type: NotificationType, data: Record<string, unknown>): T
 }
 
 /**
+ * Map from NotificationType + data to the DB template variable names.
+ */
+function mapToTemplateVariables(type: NotificationType, data: Record<string, unknown>): Record<string, string> {
+  const businessName = (data.businessName as string) || "";
+  const dashboardUrl = APP_URL + "/dashboard";
+
+  switch (type) {
+    case "welcome":
+      return {
+        business_name: businessName,
+        dashboard_url: dashboardUrl,
+      };
+
+    case "payment_received":
+      return {
+        business_name: businessName,
+        amount: String(data.amount || ""),
+        currency: String(data.currency || ""),
+        crypto_amount: String(data.amount || ""),
+        crypto_token: String(data.token || ""),
+        crypto_chain: String(data.chain || ""),
+        customer_wallet: String(data.customerWallet || ""),
+        order_id: String(data.orderId || ""),
+        tx_hash: String(data.txHash || ""),
+        payment_url: `${dashboardUrl}/payments/${data.paymentId || ""}`,
+        dashboard_url: dashboardUrl,
+      };
+
+    case "payment_failed":
+      return {
+        business_name: businessName,
+        amount: String(data.amount || ""),
+        currency: String(data.currency || ""),
+        order_id: String(data.orderId || ""),
+        reason: String(data.reason || ""),
+        payment_url: `${dashboardUrl}/payments/${data.paymentId || ""}`,
+        dashboard_url: dashboardUrl,
+      };
+
+    case "ticket_reply":
+      return {
+        business_name: businessName,
+        ticket_subject: String(data.ticketSubject || ""),
+        message_preview: String(data.messagePreview || ""),
+        ticket_status: String(data.ticketStatus || ""),
+        ticket_url: `${dashboardUrl}/support/${data.ticketId || ""}`,
+        dashboard_url: dashboardUrl,
+      };
+
+    case "withdrawal_complete":
+      return {
+        business_name: businessName,
+        amount: String(data.amount || ""),
+        currency: String(data.currency || ""),
+        destination_address: String(data.destinationAddress || ""),
+        destination_chain: String(data.chain || ""),
+        destination_token: String(data.token || ""),
+        tx_hash: String(data.txHash || ""),
+        wallet_url: `${dashboardUrl}/wallet`,
+        dashboard_url: dashboardUrl,
+      };
+
+    case "weekly_summary": {
+      const compared = data.comparedToLastWeek as number;
+      const isUp = compared >= 0;
+      return {
+        business_name: businessName,
+        total_revenue: String(data.totalRevenue || "0"),
+        payment_count: String(data.paymentCount || "0"),
+        top_token: String(data.topToken || "—"),
+        top_chain: String(data.topChain || "—"),
+        trend_percent: String(Math.abs(compared || 0)),
+        trend_direction: isUp ? "↑" : "↓",
+        trend_color: isUp ? "#4ade80" : "#f87171",
+        open_tickets: String(data.openTickets || "0"),
+        dashboard_url: dashboardUrl,
+      };
+    }
+  }
+}
+
+/**
  * Central dispatch for merchant email notifications.
  * Checks notification preferences before sending (except "welcome" which always sends).
+ * Tries DB template first, falls back to hardcoded React templates.
  */
 export async function sendMerchantEmail(
   merchantId: string,
@@ -162,17 +319,33 @@ export async function sendMerchantEmail(
       }
     }
 
-    // Build and send template
-    const template = buildTemplate(type, {
-      ...data,
-      businessName: merchant.business_name,
-    });
+    // Enrich data with business name
+    const enrichedData = { ...data, businessName: merchant.business_name };
 
-    await sendEmail({
-      to: email,
-      subject: template.subject,
-      react: template.react,
-    });
+    // Try DB template first
+    const dbTemplate = await getTemplate(type);
+
+    if (dbTemplate) {
+      const variables = mapToTemplateVariables(type, enrichedData);
+      const renderedSubject = renderTemplate(dbTemplate.subject, variables);
+      const renderedHtml = renderTemplate(dbTemplate.body_html, variables);
+      const renderedText = renderTemplate(dbTemplate.body_text, variables);
+
+      await sendEmail({
+        to: email,
+        subject: renderedSubject,
+        html: renderedHtml,
+        text: renderedText,
+      });
+    } else {
+      // Fallback to hardcoded React templates
+      const template = buildFallbackTemplate(type, enrichedData);
+      await sendEmail({
+        to: email,
+        subject: template.subject,
+        react: template.react,
+      });
+    }
   } catch (err) {
     console.error("[email] sendMerchantEmail error:", err);
   }
