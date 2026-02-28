@@ -18,7 +18,10 @@ import {
   ChevronLeft,
   Menu,
   LifeBuoy,
+  FlaskConical,
+  Plug,
 } from "lucide-react";
+import { useTestModeContext } from "@/contexts/TestModeContext";
 import { useState, useEffect } from "react";
 
 const navItems = [
@@ -43,6 +46,11 @@ const navItems = [
     icon: LifeBuoy,
   },
   {
+    title: "Webhooks",
+    href: "/dashboard/webhooks",
+    icon: Plug,
+  },
+  {
     title: "Settings",
     href: "/dashboard/settings",
     icon: Settings,
@@ -56,6 +64,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
+  const { isTestMode, toggleTestMode } = useTestModeContext();
 
   useEffect(() => {
     fetch("/api/v1/internal/tickets")
@@ -168,6 +177,41 @@ export function Sidebar() {
               })}
             </nav>
           </ScrollArea>
+
+          <Separator />
+
+          {/* Test/Live toggle */}
+          <div className="px-3 py-3">
+            <button
+              onClick={toggleTestMode}
+              className={cn(
+                "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                isTestMode
+                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                  : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+              )}
+            >
+              <FlaskConical className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <span className="flex-1 flex items-center justify-between">
+                  {isTestMode ? "Test Mode" : "Live Mode"}
+                  <span
+                    className={cn(
+                      "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                      isTestMode ? "bg-amber-500" : "bg-zinc-700"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform",
+                        isTestMode ? "translate-x-4" : "translate-x-1"
+                      )}
+                    />
+                  </span>
+                </span>
+              )}
+            </button>
+          </div>
 
           <Separator />
 
