@@ -26,6 +26,7 @@ import {
   Download,
   RotateCcw,
   Wallet,
+  Landmark,
 } from "lucide-react";
 import { useTestModeContext } from "@/contexts/TestModeContext";
 import { useState, useEffect } from "react";
@@ -80,6 +81,11 @@ const navItems = [
     title: "Export",
     href: "/dashboard/export",
     icon: Download,
+  },
+  {
+    title: "Cash Out",
+    href: "/dashboard/offramp",
+    icon: Landmark,
   },
   {
     title: "Settlement",
