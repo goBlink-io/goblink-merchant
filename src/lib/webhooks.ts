@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+import { insertNotification } from "@/lib/notifications";
 
 function getServiceClient() {
   return createClient(
@@ -91,6 +92,17 @@ export async function deliverWebhook(
       attempt: attempt + 1,
       delivered_at: null,
     });
+  }
+
+  // Notify merchant on final failure (attempt 3 or last attempt)
+  if (!isSuccess && attempt >= 3) {
+    insertNotification(
+      event.merchantId,
+      "webhook_failed",
+      "Webhook delivery failed",
+      `Failed to deliver ${event.event} to endpoint after 3 attempts.`,
+      "/dashboard/webhooks"
+    );
   }
 
   return { success: isSuccess, status: responseStatus, body: responseBody };

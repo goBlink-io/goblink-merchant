@@ -33,7 +33,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Key, Plus, Trash2, Globe, Webhook, Building2, AlertCircle, Play, RotateCw, ChevronDown, ChevronRight, Loader2, Bell } from "lucide-react";
+import { Key, Plus, Trash2, Globe, Webhook, Building2, AlertCircle, Play, RotateCw, ChevronDown, ChevronRight, Loader2, Bell, Palette } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 interface Merchant {
@@ -46,6 +46,7 @@ interface Merchant {
   settlement_token: string;
   settlement_chain: string;
   brand_color: string;
+  logo_url: string | null;
 }
 
 interface ApiKey {
@@ -85,6 +86,7 @@ export function SettingsContent({ merchant, apiKeys, webhooks, notificationPrefe
     <Tabs defaultValue="profile" className="space-y-6">
       <TabsList>
         <TabsTrigger value="profile">Business Profile</TabsTrigger>
+        <TabsTrigger value="branding">Branding</TabsTrigger>
         <TabsTrigger value="payments">Payment Preferences</TabsTrigger>
         <TabsTrigger value="api">API Keys</TabsTrigger>
         <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
@@ -93,6 +95,10 @@ export function SettingsContent({ merchant, apiKeys, webhooks, notificationPrefe
 
       <TabsContent value="profile">
         <ProfileSettings merchant={merchant} />
+      </TabsContent>
+
+      <TabsContent value="branding">
+        <BrandingSettings merchant={merchant} />
       </TabsContent>
 
       <TabsContent value="payments">
@@ -228,6 +234,163 @@ function ProfileSettings({ merchant }: { merchant: Merchant }) {
       </CardContent>
     </Card>
   );
+}
+
+function BrandingSettings({ merchant }: { merchant: Merchant }) {
+  const [logoUrl, setLogoUrl] = useState(merchant.logo_url || "");
+  const [brandColor, setBrandColor] = useState(merchant.brand_color || "#2563EB");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
+
+  async function handleSave() {
+    setSaving(true);
+    const { error } = await supabase
+      .from("merchants")
+      .update({
+        logo_url: logoUrl || null,
+        brand_color: brandColor,
+      })
+      .eq("id", merchant.id);
+
+    setSaving(false);
+    if (!error) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      router.refresh();
+    }
+  }
+
+  const initials = merchant.business_name.charAt(0).toUpperCase();
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Palette className="h-5 w-5 text-zinc-400" />
+          Checkout Branding
+        </CardTitle>
+        <CardDescription>
+          Customize how your checkout page looks to customers.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Controls */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="logoUrl">Logo URL</Label>
+              <Input
+                id="logoUrl"
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                placeholder="https://example.com/logo.png"
+                type="url"
+              />
+              <p className="text-xs text-zinc-500">
+                Square image recommended (at least 80×80px).
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="brandColor">Brand Color</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  id="brandColor"
+                  value={brandColor}
+                  onChange={(e) => setBrandColor(e.target.value)}
+                  className="h-10 w-14 rounded-lg border border-zinc-700 bg-transparent cursor-pointer"
+                />
+                <Input
+                  value={brandColor}
+                  onChange={(e) => setBrandColor(e.target.value)}
+                  className="font-mono flex-1"
+                  placeholder="#2563EB"
+                />
+              </div>
+              <p className="text-xs text-zinc-500">
+                Used as accent color on your checkout page.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save Branding"}
+              </Button>
+              {saved && (
+                <span className="text-sm text-emerald-400">Branding saved!</span>
+              )}
+            </div>
+          </div>
+
+          {/* Live preview */}
+          <div className="space-y-2">
+            <Label>Preview</Label>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-6">
+              {/* Merchant header preview */}
+              <div className="flex items-center gap-3 mb-4">
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt="Logo preview"
+                    className="h-10 w-10 rounded-xl object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div
+                    className="h-10 w-10 rounded-xl flex items-center justify-center text-white font-bold text-lg"
+                    style={{ background: brandColor }}
+                  >
+                    {initials}
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-semibold text-zinc-100">
+                    {merchant.business_name}
+                  </p>
+                  <p className="text-xs text-zinc-500">is requesting payment</p>
+                </div>
+              </div>
+
+              {/* Card preview */}
+              <div className="rounded-xl bg-zinc-900/80 border border-zinc-800/80 p-4 space-y-3">
+                <p className="text-xl font-bold text-zinc-50 text-center">$25.00</p>
+                <p className="text-xs text-zinc-400 text-center">USD</p>
+                <button
+                  className="w-full py-2.5 rounded-xl text-white text-sm font-medium"
+                  style={{
+                    background: `linear-gradient(135deg, ${brandColor}, ${adjustColor(brandColor, 40)})`,
+                  }}
+                >
+                  Pay $25.00
+                </button>
+              </div>
+
+              {/* Powered by footer */}
+              <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-zinc-600">
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
+                </svg>
+                Powered by goBlink
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Shift a hex color hue slightly for gradient effect */
+function adjustColor(hex: string, amount: number): string {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = Math.min(255, ((num >> 16) & 0xff) + amount);
+  const g = Math.min(255, ((num >> 8) & 0xff) + amount);
+  const b = Math.min(255, (num & 0xff) + amount);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
 function PaymentSettings({ merchant }: { merchant: Merchant }) {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/service-client";
 import { addAdminMessage } from "@/lib/admin/ticket-queries";
+import { insertNotification } from "@/lib/notifications";
 
 export async function POST(
   request: Request,
@@ -28,6 +29,23 @@ export async function POST(
   if (!message) return NextResponse.json({ error: "Message is required" }, { status: 400 });
 
   await addAdminMessage(id, admin.id, message);
+
+  // Notify the merchant about the reply
+  const { data: ticket } = await svc
+    .from("tickets")
+    .select("merchant_id, subject")
+    .eq("id", id)
+    .single();
+
+  if (ticket) {
+    insertNotification(
+      ticket.merchant_id,
+      "ticket_reply",
+      "New reply on your ticket",
+      `Your ticket "${ticket.subject}" has a new response.`,
+      `/dashboard/support/${id}`
+    );
+  }
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

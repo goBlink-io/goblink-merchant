@@ -4,6 +4,7 @@ import { getExecutionStatus } from "@/lib/oneclick";
 import { dispatchWebhooks } from "@/lib/webhooks";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
+import { insertNotification } from "@/lib/notifications";
 
 const FEE_RATE = 0.01; // 1%
 
@@ -90,6 +91,14 @@ export async function GET(request: NextRequest) {
           },
         });
 
+        insertNotification(
+          payment.merchant_id,
+          "payment_received",
+          "Payment received",
+          `${payment.currency} ${payment.amount} payment confirmed.`,
+          `/dashboard/payments/${payment.id}`
+        );
+
         logAudit({
           merchantId: payment.merchant_id,
           actor: "system",
@@ -124,6 +133,14 @@ export async function GET(request: NextRequest) {
             sendTxHash: payment.send_tx_hash,
           },
         });
+
+        insertNotification(
+          payment.merchant_id,
+          "payment_failed",
+          "Payment failed",
+          `${payment.currency} ${payment.amount} payment failed.`,
+          `/dashboard/payments/${payment.id}`
+        );
 
         logAudit({
           merchantId: payment.merchant_id,
