@@ -114,3 +114,57 @@
 - Tax summary: revenue by period, fee totals, refund totals
 - Branded PDF reports
 - Download button on payments page + dedicated export page
+
+---
+
+## Phase G: Merchant SDK + Integration Kit
+*Make integration a 60-second task for any developer*
+
+**G1. `@goblink/merchant-sdk` npm package**
+- `/core` — Node.js: `createPayment()`, `getPayment()`, `listPayments()`, `verifyWebhook()`
+- `/react` — `<PayWithCrypto />`, `<InvoiceButton />`, `useGoBlink()` hook
+- `/next` — Pre-wired Next.js App Router API route handlers (drop-in, zero config)
+- `/express` — Middleware for webhook HMAC verification
+- `/types` — Shared TypeScript types
+- Published to npm as `@goblink/merchant-sdk`
+- Test mode: `gb_test_` keys auto-confirm after 5s, webhooks fire normally
+
+**G2. `npx create-goblink-app` CLI**
+- Detects framework (Next.js, Express, Nuxt, plain Node)
+- Prompts: API key, webhook URL, currency, return URL
+- Generates: API routes, webhook handler, .env entries, example `<PayWithCrypto />` usage
+- Full integration scaffolded in under 60 seconds
+
+**G3. Integration Docs**
+- Hosted at docs.goblink.io/merchant (or merchant.goblink.io/docs)
+- Per-framework guides: Next.js, Express, plain Node
+- Copy-paste API route + webhook handler examples
+- Webhook event reference
+- Test mode walkthrough
+
+*Priority beta testers: Shade (Voidspace + GenerateIdeas.app) — both Next.js App Router + Supabase*
+
+---
+
+## Phase H: WooCommerce Plugin
+*Largest e-commerce platform by install base*
+
+**H1. Core Plugin**
+- PHP, extends `WC_Payment_Gateway`
+- Implements `process_payment()` — creates goBlink payment, redirects customer to `/pay/{id}`
+- Return URL handling — confirms order on `payment.confirmed` webhook
+- HPOS (High-Performance Order Storage) compatible
+- Block checkout support (WooCommerce Blocks)
+- Settings: API key, webhook secret, accepted tokens, test mode toggle
+
+**H2. Webhook Handler**
+- Listens for `payment.confirmed`, `payment.failed`, `payment.expired`
+- Verifies HMAC-SHA256 signature
+- Updates WooCommerce order status accordingly
+- Auto-refund trigger on `refund.created`
+
+**H3. Distribution**
+- GPL-2.0 license (required for WordPress.org)
+- Submit to WordPress.org plugin directory
+- Direct download from goblink.io/woocommerce as fallback
+- Separate repo: github.com/Urban-Blazer/goblink-woocommerce
