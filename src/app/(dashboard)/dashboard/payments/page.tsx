@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function PaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; search?: string; page?: string }>;
+  searchParams: Promise<{ status?: string; search?: string; page?: string; is_test?: string }>;
 }) {
   const supabase = await createClient();
   const params = await searchParams;
@@ -26,11 +26,13 @@ export default async function PaymentsPage({
   const page = parseInt(params.page || "1", 10);
   const perPage = 20;
   const offset = (page - 1) * perPage;
+  const isTest = params.is_test === "true";
 
   let query = supabase
     .from("payments")
     .select("*", { count: "exact" })
     .eq("merchant_id", merchant.id)
+    .eq("is_test", isTest)
     .order("created_at", { ascending: false })
     .range(offset, offset + perPage - 1);
 

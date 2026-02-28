@@ -23,18 +23,21 @@ export async function getAdminStats(): Promise<AdminStats> {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+  // Exclude test payments from admin stats
   const [merchantsRes, paymentsRes, confirmedRes, activeMerchantsRes] =
     await Promise.all([
       client.from("merchants").select("id", { count: "exact", head: true }),
-      client.from("payments").select("id", { count: "exact", head: true }),
+      client.from("payments").select("id", { count: "exact", head: true }).eq("is_test", false),
       client
         .from("payments")
         .select("amount, fee_amount")
-        .eq("status", "confirmed"),
+        .eq("status", "confirmed")
+        .eq("is_test", false),
       client
         .from("payments")
         .select("merchant_id")
         .eq("status", "confirmed")
+        .eq("is_test", false)
         .gte("confirmed_at", thirtyDaysAgo.toISOString()),
     ]);
 
@@ -91,6 +94,7 @@ export async function getDailyRevenue(days: number = 30): Promise<DailyRevenue[]
     .from("payments")
     .select("amount, fee_amount, confirmed_at")
     .eq("status", "confirmed")
+    .eq("is_test", false)
     .gte("confirmed_at", since.toISOString())
     .order("confirmed_at", { ascending: true });
 
@@ -235,6 +239,7 @@ export async function getGlobalPayments(params: {
   chain?: string;
   token?: string;
   search?: string;
+  isTest?: string;
   limit?: number;
   offset?: number;
 }): Promise<{ data: AdminPayment[]; total: number }> {
@@ -252,6 +257,7 @@ export async function getGlobalPayments(params: {
   if (params.merchantId) query = query.eq("merchant_id", params.merchantId);
   if (params.chain) query = query.eq("crypto_chain", params.chain);
   if (params.token) query = query.eq("crypto_token", params.token);
+  if (params.isTest !== undefined) query = query.eq("is_test", params.isTest === "true");
   if (params.search) {
     query = query.or(
       `id.ilike.%${params.search}%,external_order_id.ilike.%${params.search}%,send_tx_hash.ilike.%${params.search}%`
@@ -308,7 +314,8 @@ export async function getRevenueStats(): Promise<{
   const { data: allConfirmed } = await client
     .from("payments")
     .select("fee_amount, confirmed_at")
-    .eq("status", "confirmed");
+    .eq("status", "confirmed")
+    .eq("is_test", false);
 
   if (!allConfirmed) {
     return { today: 0, thisWeek: 0, thisMonth: 0, allTime: 0, avgFeePerPayment: 0, projectedMonthly: 0 };
@@ -338,7 +345,8 @@ export async function getRevenueByMerchant(limit: number = 10): Promise<RevenueB
   const { data: payments } = await client
     .from("payments")
     .select("merchant_id, amount, fee_amount")
-    .eq("status", "confirmed");
+    .eq("status", "confirmed")
+    .eq("is_test", false);
 
   if (!payments) return [];
 
@@ -374,7 +382,8 @@ export async function getRevenueByChain(): Promise<RevenueByChain[]> {
   const { data } = await svc()
     .from("payments")
     .select("crypto_chain, fee_amount")
-    .eq("status", "confirmed");
+    .eq("status", "confirmed")
+    .eq("is_test", false);
 
   if (!data) return [];
 

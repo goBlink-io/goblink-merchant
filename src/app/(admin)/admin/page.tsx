@@ -21,7 +21,7 @@ async function StatsGrid() {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
       <StatCard title="Total Merchants" value={stats.totalMerchants.toLocaleString()} icon={Users} subtitle="All time" />
-      <StatCard title="Total Payments" value={stats.totalPayments.toLocaleString()} icon={CreditCard} subtitle="All time" />
+      <StatCard title="Total Payments" value={stats.totalPayments.toLocaleString()} icon={CreditCard} subtitle="Live only (excl. test)" />
       <StatCard title="Total Volume" value={formatCurrency(stats.totalVolume)} icon={DollarSign} subtitle="Confirmed payments" />
       <StatCard title="Fee Revenue" value={formatCurrency(stats.feeRevenue)} icon={TrendingUp} subtitle="Our total earnings" />
       <StatCard title="Active Merchants" value={stats.activeMerchants.toLocaleString()} icon={Activity} subtitle="Payment in last 30d" />
@@ -76,6 +76,11 @@ async function RecentPaymentsFeed() {
                   <p className="text-xs text-zinc-500">{formatDate(p.created_at)}</p>
                 </div>
                 <div className="flex items-center gap-3">
+                  {p.is_test && (
+                    <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]" variant="outline">
+                      Test
+                    </Badge>
+                  )}
                   <Badge className={getStatusColor(p.status)} variant="outline">
                     {p.status}
                   </Badge>

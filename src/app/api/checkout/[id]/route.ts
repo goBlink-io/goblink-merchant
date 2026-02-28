@@ -32,7 +32,7 @@ export async function GET(
   const { data: payment, error } = await supabase
     .from("payments")
     .select(
-      "id, merchant_id, amount, currency, status, external_order_id, deposit_address, return_url, metadata, expires_at, confirmed_at, created_at, send_tx_hash, fulfillment_tx_hash, customer_wallet, customer_chain"
+      "id, merchant_id, amount, currency, status, external_order_id, deposit_address, return_url, metadata, expires_at, confirmed_at, created_at, send_tx_hash, fulfillment_tx_hash, customer_wallet, customer_chain, is_test"
     )
     .eq("id", id)
     .single();
@@ -76,6 +76,7 @@ export async function GET(
       fulfillmentTxHash: payment.fulfillment_tx_hash,
       customerWallet: payment.customer_wallet,
       customerChain: payment.customer_chain,
+      isTest: payment.is_test,
     },
     merchant: merchant
       ? {

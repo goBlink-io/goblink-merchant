@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 async function PaymentsTable({
   searchParams,
 }: {
-  searchParams: { status?: string; merchant?: string; chain?: string; token?: string; search?: string; page?: string };
+  searchParams: { status?: string; merchant?: string; chain?: string; token?: string; search?: string; page?: string; is_test?: string };
 }) {
   const page = Number(searchParams.page) || 1;
   const limit = 50;
@@ -30,9 +30,13 @@ async function PaymentsTable({
     chain: searchParams.chain,
     token: searchParams.token,
     search: searchParams.search,
+    isTest: searchParams.is_test,
     limit,
     offset,
   });
+
+  // Count test payments separately
+  const testCount = payments.filter((p) => p.is_test).length;
 
   const totalPages = Math.ceil(total / limit);
 
@@ -43,6 +47,7 @@ async function PaymentsTable({
         <CardDescription>
           {total} total payments across all merchants
           {searchParams.status ? ` (filtered: ${searchParams.status})` : ""}
+          {testCount > 0 ? ` · ${testCount} test` : ""}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -57,6 +62,7 @@ async function PaymentsTable({
                   <TableHead>Merchant</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Mode</TableHead>
                   <TableHead>Chain</TableHead>
                   <TableHead>Token</TableHead>
                   <TableHead>Created</TableHead>
@@ -73,6 +79,13 @@ async function PaymentsTable({
                     </TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(p.status)} variant="outline">{p.status}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {p.is_test ? (
+                        <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]" variant="outline">Test</Badge>
+                      ) : (
+                        <span className="text-xs text-zinc-500">Live</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-xs">{p.crypto_chain || "—"}</TableCell>
                     <TableCell className="text-xs">{p.crypto_token || "—"}</TableCell>
@@ -119,10 +132,20 @@ async function PaymentsTable({
 export default async function AdminPaymentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; merchant?: string; chain?: string; token?: string; search?: string; page?: string }>;
+  searchParams: Promise<{ status?: string; merchant?: string; chain?: string; token?: string; search?: string; page?: string; is_test?: string }>;
 }) {
   const params = await searchParams;
   const statuses = ["pending", "processing", "confirmed", "failed", "expired", "refunded"];
+
+  function buildHref(overrides: Record<string, string | undefined>) {
+    const p = new URLSearchParams();
+    const merged = { ...params, ...overrides };
+    for (const [k, v] of Object.entries(merged)) {
+      if (v !== undefined && v !== "") p.set(k, v);
+    }
+    p.delete("page");
+    return `/admin/payments?${p.toString()}`;
+  }
 
   return (
     <div className="space-y-6">
@@ -134,7 +157,7 @@ export default async function AdminPaymentsPage({
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
         <a
-          href="/admin/payments"
+          href={buildHref({ status: undefined })}
           className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
             !params.status
               ? "bg-violet-600/20 text-violet-400 border border-violet-500/30"
@@ -146,7 +169,7 @@ export default async function AdminPaymentsPage({
         {statuses.map((s) => (
           <a
             key={s}
-            href={`/admin/payments?status=${s}`}
+            href={buildHref({ status: s })}
             className={`px-3 py-1.5 rounded-lg text-sm capitalize transition-colors ${
               params.status === s
                 ? "bg-violet-600/20 text-violet-400 border border-violet-500/30"
@@ -156,6 +179,37 @@ export default async function AdminPaymentsPage({
             {s}
           </a>
         ))}
+        <span className="w-px bg-zinc-700 mx-1" />
+        <a
+          href={buildHref({ is_test: undefined })}
+          className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+            !params.is_test
+              ? "bg-emerald-600/20 text-emerald-400 border border-emerald-500/30"
+              : "bg-zinc-800 text-zinc-400 hover:text-white"
+          }`}
+        >
+          All modes
+        </a>
+        <a
+          href={buildHref({ is_test: "false" })}
+          className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+            params.is_test === "false"
+              ? "bg-emerald-600/20 text-emerald-400 border border-emerald-500/30"
+              : "bg-zinc-800 text-zinc-400 hover:text-white"
+          }`}
+        >
+          Live only
+        </a>
+        <a
+          href={buildHref({ is_test: "true" })}
+          className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+            params.is_test === "true"
+              ? "bg-amber-600/20 text-amber-400 border border-amber-500/30"
+              : "bg-zinc-800 text-zinc-400 hover:text-white"
+          }`}
+        >
+          Test only
+        </a>
       </div>
 
       <Suspense fallback={<TableSkeleton rows={15} />}>

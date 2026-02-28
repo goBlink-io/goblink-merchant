@@ -83,6 +83,15 @@ export default async function PaymentDetailPage({
 
   return (
     <div className="space-y-6">
+      {/* Test payment banner */}
+      {payment.is_test && (
+        <div className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center">
+          <p className="text-sm font-medium text-amber-400">
+            TEST PAYMENT — This payment was created with a test API key
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/dashboard/payments">
@@ -95,6 +104,11 @@ export default async function PaymentDetailPage({
             <h1 className="text-2xl font-bold text-white">
               {payment.external_order_id || `Payment #${payment.id.slice(0, 8)}`}
             </h1>
+            {payment.is_test && (
+              <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30" variant="outline">
+                Test
+              </Badge>
+            )}
             <Badge className={getStatusColor(payment.status)} variant="outline">
               {payment.status}
             </Badge>

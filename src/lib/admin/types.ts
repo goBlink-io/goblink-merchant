@@ -44,6 +44,7 @@ export interface AdminPayment {
   confirmed_at: string | null;
   created_at: string;
   updated_at: string;
+  is_test: boolean;
   merchant_name?: string;
 }
 

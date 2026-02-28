@@ -15,8 +15,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, ChevronLeft, ChevronRight, CreditCard, Share2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SharePaymentDialog } from "@/components/dashboard/share-payment-dialog";
+import { useTestModeContext } from "@/contexts/TestModeContext";
 
 interface Payment {
   id: string;
@@ -31,6 +32,7 @@ interface Payment {
   send_tx_hash: string | null;
   payment_url: string | null;
   created_at: string;
+  is_test?: boolean;
 }
 
 interface PaymentsListProps {
@@ -66,6 +68,22 @@ export function PaymentsList({
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(currentSearch);
   const [sharePayment, setSharePayment] = useState<Payment | null>(null);
+  const { isTestMode } = useTestModeContext();
+
+  // Sync test mode context with URL param
+  useEffect(() => {
+    const currentIsTest = searchParams.get("is_test") === "true";
+    if (currentIsTest !== isTestMode) {
+      const params = new URLSearchParams(searchParams.toString());
+      if (isTestMode) {
+        params.set("is_test", "true");
+      } else {
+        params.delete("is_test");
+      }
+      params.delete("page");
+      router.push(`/dashboard/payments?${params.toString()}`);
+    }
+  }, [isTestMode, searchParams, router]);
 
   const totalPages = Math.ceil(totalCount / perPage);
 
@@ -176,7 +194,12 @@ export function PaymentsList({
                       <span className="text-sm text-zinc-600">--</span>
                     )}
                   </Link>
-                  <div className="col-span-2">
+                  <div className="col-span-2 flex items-center gap-1.5">
+                    {payment.is_test && (
+                      <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]" variant="outline">
+                        Test
+                      </Badge>
+                    )}
                     <Badge className={getStatusColor(payment.status)} variant="outline">
                       {payment.status}
                     </Badge>

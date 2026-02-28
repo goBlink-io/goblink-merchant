@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
     deposit_address: merchant.wallet_address,
     status: "pending" as const,
     expires_at: expiresAt,
+    is_test: auth.isTest,
   };
 
   const { data: inserted, error: insertError } = await supabase
@@ -111,6 +112,7 @@ export async function POST(request: NextRequest) {
       orderId: payment.external_order_id,
       expiresAt: payment.expires_at,
       createdAt: payment.created_at,
+      isTest: payment.is_test,
     },
     201
   );
@@ -126,6 +128,7 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const status = searchParams.get("status");
   const orderId = searchParams.get("orderId");
+  const isTestParam = searchParams.get("is_test");
   const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
   const offset = parseInt(searchParams.get("offset") || "0", 10);
 
@@ -144,6 +147,10 @@ export async function GET(request: NextRequest) {
 
   if (orderId) {
     query = query.eq("external_order_id", orderId);
+  }
+
+  if (isTestParam !== null) {
+    query = query.eq("is_test", isTestParam === "true");
   }
 
   const { data: payments, count, error } = await query;
@@ -187,5 +194,6 @@ function formatPaymentResponse(p: Record<string, unknown>) {
     confirmedAt: p.confirmed_at,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
+    isTest: p.is_test,
   };
 }

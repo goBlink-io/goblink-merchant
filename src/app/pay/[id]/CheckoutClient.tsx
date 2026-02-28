@@ -14,6 +14,7 @@ import {
   Wallet,
   Copy,
   ArrowRight,
+  Zap,
 } from "lucide-react";
 import { useWalletContext } from "@/contexts/WalletContext";
 import ConnectWalletModal from "@/components/checkout/ConnectWalletModal";
@@ -46,6 +47,7 @@ interface PaymentData {
   fulfillmentTxHash: string | null;
   customerWallet: string | null;
   customerChain: string | null;
+  isTest?: boolean;
 }
 
 interface MerchantData {
@@ -145,6 +147,39 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
 
   const walletConnected = isChainConnected(selectedChain.type);
   const walletAddress = getAddressForChain(selectedChain.type);
+
+  // --- Test mode simulation ---
+  const isTest = initialPayment.isTest === true;
+  const [simulating, setSimulating] = useState(false);
+  const [simError, setSimError] = useState<string | null>(null);
+
+  const handleSimulate = async () => {
+    setSimulating(true);
+    setSimError(null);
+    try {
+      const res = await fetch(`/api/checkout/${paymentId}/simulate`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSimError(data?.error?.message || "Simulation failed");
+        setSimulating(false);
+        return;
+      }
+      // Update local state to reflect confirmed
+      setPayment((prev) => ({
+        ...prev,
+        status: "confirmed",
+        fulfillmentTxHash: data.txHash,
+        confirmedAt: new Date().toISOString(),
+      }));
+      setStep("success");
+    } catch {
+      setSimError("Network error during simulation");
+    } finally {
+      setSimulating(false);
+    }
+  };
 
   // --- Auto-detect chain from connected wallet ---
   useEffect(() => {
@@ -412,7 +447,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   // Expired / Not found
   if (payment.status === "expired" || isExpired) {
     return (
-      <Card merchant={merchant}>
+      <Card merchant={merchant} isTest={isTest}>
         <div className="flex flex-col items-center text-center py-8">
           <div className="h-16 w-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
             <AlertCircle className="h-8 w-8 text-red-400" />
@@ -464,7 +499,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
 
   if (step === "success") {
     return (
-      <Card merchant={merchant}>
+      <Card merchant={merchant} isTest={isTest}>
         <JourneyStepper current="done" />
         <div className="flex flex-col items-center text-center py-8">
           <div className="h-20 w-20 rounded-full bg-emerald-500/10 flex items-center justify-center mb-5 animate-in zoom-in duration-500">
@@ -477,6 +512,13 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
           <p className="text-xs text-zinc-500 mb-6">
             The merchant has been notified of your payment.
           </p>
+          {isTest && (
+            <div className="w-full mb-4 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30">
+              <p className="text-xs text-amber-400 text-center">
+                This was a test payment — no real funds were transferred
+              </p>
+            </div>
+          )}
           {payment.fulfillmentTxHash && (
             <div className="w-full p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/50 mb-4">
               <p className="text-xs text-zinc-500 mb-1">Transaction</p>
@@ -527,7 +569,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   if (step === "failed") {
     const isRefunded = payment.status === "refunded";
     return (
-      <Card merchant={merchant}>
+      <Card merchant={merchant} isTest={isTest}>
         <div className="flex flex-col items-center text-center py-8">
           <div className="h-16 w-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
             <AlertCircle className="h-8 w-8 text-red-400" />
@@ -561,7 +603,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   // Processing (waiting for confirmation)
   if (step === "processing") {
     return (
-      <Card merchant={merchant}>
+      <Card merchant={merchant} isTest={isTest}>
         <JourneyStepper current="pay" />
         <AmountHeader payment={payment} />
         <div className="flex flex-col items-center text-center py-8">
@@ -600,7 +642,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   // Confirm step (deposit address shown)
   if (step === "confirm") {
     return (
-      <Card merchant={merchant}>
+      <Card merchant={merchant} isTest={isTest}>
         <JourneyStepper current="pay" />
         <AmountHeader payment={payment} />
 
@@ -666,7 +708,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
 
   // --- Select step (main checkout form) ---
   return (
-    <Card merchant={merchant}>
+    <Card merchant={merchant} isTest={isTest}>
       <JourneyStepper current="choose" />
       <AmountHeader payment={payment} />
 
@@ -895,6 +937,43 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
         )}
       </div>
 
+      {/* Test mode: Simulate Payment button */}
+      {isTest && (
+        <div className="mt-6 space-y-3">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-zinc-700/50" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="bg-zinc-900 px-2 text-amber-400/80">Test Mode</span>
+            </div>
+          </div>
+          <button
+            onClick={handleSimulate}
+            disabled={simulating}
+            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white font-medium hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {simulating ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Simulating payment...
+              </>
+            ) : (
+              <>
+                <Zap className="h-4 w-4" />
+                Simulate Payment
+              </>
+            )}
+          </button>
+          {simError && (
+            <p className="text-xs text-red-400 text-center">{simError}</p>
+          )}
+          <p className="text-xs text-amber-400/60 text-center">
+            Instantly confirms with a fake transaction hash
+          </p>
+        </div>
+      )}
+
       {/* Trust badge */}
       <div className="flex items-center justify-center gap-1.5 mt-6 text-xs text-zinc-500">
         <Shield className="h-3.5 w-3.5" />
@@ -912,12 +991,23 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
 function Card({
   merchant,
   children,
+  isTest,
 }: {
   merchant: MerchantData | null;
   children: React.ReactNode;
+  isTest?: boolean;
 }) {
   return (
     <div className="w-full max-w-md">
+      {/* Test mode banner */}
+      {isTest && (
+        <div className="mb-4 px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center">
+          <p className="text-sm font-semibold text-amber-400">
+            TEST MODE — No real funds will be transferred
+          </p>
+        </div>
+      )}
+
       {/* Merchant branding */}
       {merchant && (
         <div className="flex items-center gap-3 mb-6">
