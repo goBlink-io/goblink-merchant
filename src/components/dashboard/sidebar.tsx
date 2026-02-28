@@ -24,6 +24,7 @@ import {
   Store,
   Activity,
   Download,
+  RotateCcw,
 } from "lucide-react";
 import { useTestModeContext } from "@/contexts/TestModeContext";
 import { useState, useEffect } from "react";
@@ -38,6 +39,11 @@ const navItems = [
     title: "Payments",
     href: "/dashboard/payments",
     icon: CreditCard,
+  },
+  {
+    title: "Refunds",
+    href: "/dashboard/refunds",
+    icon: RotateCcw,
   },
   {
     title: "Payment Links",

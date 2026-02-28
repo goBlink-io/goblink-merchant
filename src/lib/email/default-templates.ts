@@ -254,6 +254,40 @@ View wallet: {{wallet_url}}
 © 2026 goBlink · goblink.io`,
   },
 
+  refund_issued: {
+    subject: "Refund issued: ${{amount}} {{currency}}",
+    body_html: wrap(
+      `<div style="text-align:center;padding:16px;background-color:#2e1065;border:1px solid #6d28d9;border-radius:8px;margin-bottom:24px;">
+    <p style="color:#a78bfa;font-size:13px;margin:0 0 4px;">Refund Issued</p>
+    <p style="color:#fafafa;font-size:28px;font-weight:bold;margin:0;">\${{amount}} {{currency}}</p>
+  </div>
+  <h2 style="color:#fafafa;font-size:16px;margin:0 0 16px;">Refund Details</h2>
+  <table width="100%" cellpadding="0" cellspacing="0">
+  <tr><td style="padding:8px 0;color:#a1a1aa;font-size:13px;width:140px;">Refund Amount</td><td style="padding:8px 0;color:#fafafa;font-size:13px;">\${{amount}} {{currency}}</td></tr>
+  <tr><td colspan="2" style="border-bottom:1px solid #27272a;"></td></tr>
+  <tr><td style="padding:8px 0;color:#a1a1aa;font-size:13px;width:140px;">Original Payment</td><td style="padding:8px 0;color:#fafafa;font-size:13px;">\${{original_amount}} {{currency}}</td></tr>
+  <tr><td colspan="2" style="border-bottom:1px solid #27272a;"></td></tr>
+  <tr><td style="padding:8px 0;color:#a1a1aa;font-size:13px;width:140px;">Reason</td><td style="padding:8px 0;color:#fafafa;font-size:13px;">{{reason}}</td></tr>
+  <tr><td colspan="2" style="border-bottom:1px solid #27272a;"></td></tr>
+  <tr><td style="padding:8px 0;color:#a1a1aa;font-size:13px;width:140px;">Refund ID</td><td style="padding:8px 0;color:#fafafa;font-size:13px;font-family:monospace;">{{refund_id}}</td></tr>
+  </table>
+  ${button("{{payment_url}}", "View Payment")}`,
+      FOOTER_WITH_PREFS
+    ),
+    body_text: `Refund issued: \${{amount}} {{currency}}
+
+Hi {{business_name}}, a refund has been issued.
+
+Refund Amount: \${{amount}} {{currency}}
+Original Payment: \${{original_amount}} {{currency}}
+Reason: {{reason}}
+Refund ID: {{refund_id}}
+
+View payment: {{payment_url}}
+
+© 2026 goBlink · goblink.io`,
+  },
+
   weekly_summary: {
     subject: "Your weekly summary — ${{total_revenue}} earned",
     body_html: wrap(

@@ -80,6 +80,49 @@ export async function notifyPaymentFailed(paymentId: string): Promise<void> {
 }
 
 /**
+ * Notify merchant that a refund was issued.
+ * Call after a refund record is created.
+ */
+export async function notifyRefundIssued(refundId: string): Promise<void> {
+  const supabase = getServiceClient();
+
+  const { data: refund } = await supabase
+    .from("refunds")
+    .select("id, payment_id, merchant_id, amount, currency, reason, created_at")
+    .eq("id", refundId)
+    .single();
+
+  if (!refund) {
+    console.error("[email] Refund not found:", refundId);
+    return;
+  }
+
+  const { data: payment } = await supabase
+    .from("payments")
+    .select("id, amount, currency")
+    .eq("id", refund.payment_id)
+    .single();
+
+  if (!payment) {
+    console.error("[email] Payment not found for refund:", refund.payment_id);
+    return;
+  }
+
+  await sendMerchantEmail(refund.merchant_id, "refund_issued", {
+    amount: refund.amount,
+    currency: refund.currency,
+    originalAmount: payment.amount,
+    reason: refund.reason,
+    paymentId: refund.payment_id,
+    refundId: refund.id,
+    time: new Date(refund.created_at).toLocaleString("en-US", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    }),
+  });
+}
+
+/**
  * Notify merchant that an admin replied to their support ticket.
  * Call after an admin sends a message on a ticket.
  */

@@ -6,6 +6,7 @@ import { ChatWrapper } from "@/components/chatbot/chat-wrapper";
 import { TestModeProvider } from "@/contexts/TestModeContext";
 import { TestModeBar } from "@/components/dashboard/test-mode-bar";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
+import { Toaster } from "sonner";
 
 export default async function DashboardLayout({
   children,
@@ -48,6 +49,7 @@ export default async function DashboardLayout({
           <ChatWrapper />
         </Suspense>
       </div>
+      <Toaster theme="dark" richColors position="top-right" />
     </TestModeProvider>
   );
 }
