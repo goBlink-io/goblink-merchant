@@ -22,6 +22,8 @@ import {
   Plug,
   FileText,
   Store,
+  Activity,
+  Download,
 } from "lucide-react";
 import { useTestModeContext } from "@/contexts/TestModeContext";
 import { useState, useEffect } from "react";
@@ -61,6 +63,16 @@ const navItems = [
     title: "Webhooks",
     href: "/dashboard/webhooks",
     icon: Plug,
+  },
+  {
+    title: "Activity",
+    href: "/dashboard/activity",
+    icon: Activity,
+  },
+  {
+    title: "Export",
+    href: "/dashboard/export",
+    icon: Download,
   },
   {
     title: "Settings",
