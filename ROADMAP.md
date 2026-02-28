@@ -211,3 +211,64 @@ Key providers to evaluate:
 - This is the **Web2 merchant unlock** — customers don't need existing crypto
 
 *Decision: Research first (I1), then build I2 (offramp) before I3 (onramp). Merchants getting paid out matters more than customer onramp UX.*
+
+---
+
+## Phase J: Intents Aggregation Research
+*From 1Click consumer to best-rate meta-aggregator*
+
+**The Vision**
+goBlink currently routes all swaps through NEAR Intents (1Click). Phase J explores becoming an intents aggregator — querying multiple intent protocols simultaneously and routing to whoever gives the best rate for a given path. This expands token coverage, chain support, and price competitiveness while deepening our moat.
+
+**J1. Research Sprint — Intent Protocol Landscape**
+
+| Protocol | Type | Chains | Strengths | API Available |
+|---|---|---|---|---|
+| **NEAR Intents (1Click)** | Cross-chain solver network | 26+ chains | Already integrated. Best cross-chain coverage. Non-custodial. | ✅ REST |
+| **Li.Fi** | Bridge + DEX aggregator | All major EVM + Solana | Aggregates every bridge + DEX + intent system. Single API. Battle-tested. | ✅ SDK + API |
+| **Socket Protocol** | Cross-chain aggregator | 15+ EVM chains | Similar to Li.Fi. Strong bridge routing. | ✅ API |
+| **UniswapX** | Intent-based DEX | EVM (Dutch auction) | MEV protection, gasless. EVM-only. Solver competition = best prices on-chain. | ✅ |
+| **CoW Protocol** | Batch auction intents | EVM | Coincidence of Wants matching. Best for same-block batch settlement. | ✅ API |
+| **1inch Fusion+** | Intent-based DEX | EVM + cross-chain | Gasless. Resolvers pay gas. Cross-chain via Fusion+. | ✅ SDK |
+| **Across Protocol** | Cross-chain intents | EVM | Fast bridging via relayers. Intent-based. | ✅ API |
+| **Relay** | Cross-chain intents | EVM | Speed-focused. Low fees. | ✅ API |
+| **Anoma** | General intents VM | Multi-chain | Most expressive intent language. Pre-production. | 🔬 Research |
+| **Particle Network** | Chain abstraction | Universal | Account abstraction + intents. Targets chain-agnostic UX. | ✅ SDK |
+
+**Research questions:**
+- Which protocols offer a quote API (not just execution) so we can compare rates pre-commitment?
+- Which have SDK/API maturity for production integration?
+- Fee structure: do protocols charge per-quote or per-execution?
+- Can we query NEAR Intents + Li.Fi + 1inch Fusion simultaneously and compare?
+- What's the latency of multi-protocol quoting (user-facing impact)?
+- Which protocols support the long tail of tokens we'd need for merchant payouts?
+
+**J2. goBlink as Intents Meta-Aggregator**
+
+Architecture concept:
+```
+User Intent: "Send 100 USDC from ETH → SOL"
+         ↓
+goBlink Quote Engine (parallel)
+    ├── NEAR Intents: quote A ($99.12 out)
+    ├── Li.Fi: quote B ($99.45 out) ← winner
+    ├── 1inch Fusion+: quote C ($98.87 out)
+    └── Across: quote D ($99.01 out)
+         ↓
+Route via Li.Fi → user gets best rate
+goBlink earns fee regardless of which protocol executes
+```
+
+Benefits:
+- Best rate for every swap, every time — impossible for single-protocol competitors to beat
+- Expanded token/chain coverage (Li.Fi alone covers every major DEX on every EVM chain)
+- Revenue resilient — we collect fees across all protocols, not just NEAR Intents
+- Deeper moat: aggregation logic is a defensible layer, not easily replicated
+
+**J3. Token Expansion**
+- NEAR Intents: strong cross-chain coverage, ~65 tokens
+- Li.Fi: thousands of tokens across all EVM chains + Solana
+- Combined: near-universal coverage
+- Long-tail token support unlocks: merchant payouts in any token, niche chain support, DeFi-native user base
+
+*This phase is pure research + architecture. No code until research sprint is complete and we've decided on the aggregation strategy.*
