@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select";
 import {
   Shield,
-  Building2,
   Wallet,
   Settings,
   ArrowRight,
@@ -29,13 +28,16 @@ import {
   LayoutDashboard,
   AlertCircle,
   Sparkles,
+  HelpCircle,
+  Info,
 } from "lucide-react";
+import { ExchangeOfframpGuide } from "@/components/settlement/exchange-offramp-guide";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-type Tier = "quick_start" | "byoe" | "byow" | "custom";
+type Tier = "new_to_crypto" | "has_wallet" | "power_user";
 
 const STEP_LABELS = [
   "Welcome",
@@ -65,7 +67,7 @@ const CHAINS: Record<string, { name: string; tokens: string[] }> = {
 const EXCHANGES = [
   { id: "coinbase", name: "Coinbase", chain: "base", token: "USDC" },
   { id: "kraken", name: "Kraken", chain: "ethereum", token: "USDC" },
-  { id: "shakepay", name: "Shakepay", chain: "ethereum", token: "ETH" },
+  { id: "shakepay", name: "Shakepay", chain: "ethereum", token: "USDC" },
   { id: "newton", name: "Newton", chain: "ethereum", token: "ETH" },
   { id: "robinhood", name: "Robinhood", chain: "ethereum", token: "USDC" },
   { id: "binance", name: "Binance", chain: "ethereum", token: "USDC" },
@@ -132,7 +134,8 @@ interface FormData {
   exchangeName: string;
   currency: string;
   timezone: string;
-  evmChain: string; // for BYOW when address is EVM
+  evmChain: string;
+  thirdwebAuthMethod: string; // google, apple, email
 }
 
 // ---------------------------------------------------------------------------
@@ -160,6 +163,7 @@ export function OnboardingWizard({
     currency: currentCurrency || "USD",
     timezone: currentTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
     evmChain: "base",
+    thirdwebAuthMethod: "",
   });
 
   const [liveKey, setLiveKey] = useState<string | null>(null);
@@ -198,22 +202,17 @@ export function OnboardingWizard({
 
   function isConfigValid(): boolean {
     switch (formData.tier) {
-      case "quick_start":
-        return true; // no user input needed
-      case "byoe":
-        return (
-          !!formData.exchangeName &&
-          !!formData.walletAddress &&
-          isValidAddress(formData.walletAddress, formData.settlementChain)
-        );
-      case "byow": {
+      case "new_to_crypto":
+        // Need a wallet address captured from thirdweb
+        return !!formData.walletAddress && isEvmAddress(formData.walletAddress);
+      case "has_wallet": {
         const detected = detectChainFromAddress(formData.walletAddress);
         if (!detected) return false;
         if (detected === "evm")
           return !!formData.evmChain && isEvmAddress(formData.walletAddress);
         return true;
       }
-      case "custom":
+      case "power_user":
         return (
           !!formData.settlementChain &&
           !!formData.settlementToken &&
@@ -227,7 +226,7 @@ export function OnboardingWizard({
 
   async function handleNext() {
     if (step < 5) {
-      // When leaving step 4 (Business Details), save onboarding
+      // When leaving step 3 (Business Details), save onboarding
       if (step === 3) {
         setLoading(true);
         setError(null);
@@ -272,18 +271,18 @@ export function OnboardingWizard({
       tier: formData.tier,
       settlement_chain: formData.settlementChain,
       settlement_token: formData.settlementToken,
+      wallet_address: formData.walletAddress,
       currency: formData.currency,
       timezone: formData.timezone,
     };
 
-    if (formData.tier === "quick_start") {
+    if (formData.tier === "new_to_crypto") {
       payload.settlement_chain = "base";
       payload.settlement_token = "USDC";
-    } else {
-      payload.wallet_address = formData.walletAddress;
+      payload.thirdweb_auth_method = formData.thirdwebAuthMethod;
     }
 
-    if (formData.tier === "byoe") {
+    if (formData.exchangeName) {
       payload.exchange_name = formData.exchangeName;
     }
 
@@ -351,14 +350,12 @@ export function OnboardingWizard({
   async function fireConfetti() {
     try {
       const confetti = (await import("canvas-confetti")).default;
-      // First burst
       confetti({
         particleCount: 80,
         spread: 70,
         origin: { y: 0.6 },
         colors: ["#2563EB", "#7C3AED", "#3B82F6", "#8B5CF6", "#60A5FA"],
       });
-      // Second burst after brief delay
       setTimeout(() => {
         confetti({
           particleCount: 50,
@@ -385,9 +382,9 @@ export function OnboardingWizard({
     }
   }, [step]);
 
-  // ---------- BYOW auto-detection ----------
+  // ---------- Address auto-detection (Tier 2: has_wallet) ----------
 
-  function handleByowAddressChange(address: string) {
+  function handleAddressChange(address: string) {
     update({ walletAddress: address });
     const detected = detectChainFromAddress(address);
     if (detected === "solana") {
@@ -401,17 +398,15 @@ export function OnboardingWizard({
     }
   }
 
-  // ---------- BYOE exchange selection ----------
+  // ---------- Thirdweb wallet address capture ----------
 
-  function handleExchangeSelect(exchangeId: string) {
-    const exchange = EXCHANGES.find((e) => e.id === exchangeId);
-    if (exchange) {
-      update({
-        exchangeName: exchange.id,
-        settlementChain: exchange.chain,
-        settlementToken: exchange.token,
-      });
-    }
+  function handleThirdwebWalletConnected(address: string, authMethod: string) {
+    update({
+      walletAddress: address,
+      settlementChain: "base",
+      settlementToken: "USDC",
+      thirdwebAuthMethod: authMethod,
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -499,8 +494,8 @@ export function OnboardingWizard({
               tier={formData.tier!}
               formData={formData}
               update={update}
-              onExchangeSelect={handleExchangeSelect}
-              onByowAddressChange={handleByowAddressChange}
+              onAddressChange={handleAddressChange}
+              onThirdwebConnected={handleThirdwebWalletConnected}
             />
           )}
           {step === 3 && (
@@ -598,6 +593,20 @@ function StepWelcome({
           seconds.
         </p>
       </div>
+
+      {/* Zero custody explainer */}
+      <div className="flex items-start gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-left max-w-md mx-auto">
+        <Shield className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+        <div className="text-sm">
+          <p className="text-emerald-300 font-medium">Non-custodial by design</p>
+          <p className="text-emerald-300/70 mt-1">
+            We never store your private keys or seed phrases. Payments settle
+            directly to your wallet address. If we get hacked, attackers only
+            see public addresses.
+          </p>
+        </div>
+      </div>
+
       <Button size="lg" onClick={onContinue}>
         Get Started
         <ArrowRight className="h-4 w-4" />
@@ -618,32 +627,25 @@ const TIER_OPTIONS: {
   recommended?: boolean;
 }[] = [
   {
-    id: "quick_start",
-    title: "Quick Start",
+    id: "new_to_crypto",
+    title: "I'm new to crypto",
     description:
-      "We create a smart wallet for you on Base. No crypto experience needed.",
-    icon: Shield,
+      "Create a wallet instantly with Google, Apple, or email. No seed phrases, no downloads. Self-custodial via MPC — we never have access to your keys.",
+    icon: Sparkles,
     recommended: true,
   },
   {
-    id: "byoe",
-    title: "Bring Your Own Exchange (BYOE)",
+    id: "has_wallet",
+    title: "I have a wallet",
     description:
-      "Already have Coinbase, Kraken, or Shakepay? Route payments directly there.",
-    icon: Building2,
-  },
-  {
-    id: "byow",
-    title: "Bring Your Own Wallet (BYOW)",
-    description:
-      "Have MetaMask, Phantom, or another wallet? Connect it. Any chain, any wallet.",
+      "Already have MetaMask, Phantom, or another wallet? Paste your address and we'll auto-detect the chain.",
     icon: Wallet,
   },
   {
-    id: "custom",
-    title: "Custom Setup",
+    id: "power_user",
+    title: "Power user",
     description:
-      "Pick your exact chain, token, and wallet. For crypto natives.",
+      "Pick your exact chain, token, and wallet address. Full control over settlement preferences.",
     icon: Settings,
   },
 ];
@@ -659,10 +661,10 @@ function StepChooseTier({
     <div className="space-y-6">
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold text-white">
-          Choose Your Setup
+          How do you want to receive payments?
         </h2>
         <p className="text-zinc-400">
-          How do you want to receive crypto payments?
+          Choose the option that best fits your experience level.
         </p>
       </div>
 
@@ -733,173 +735,220 @@ function StepConfigure({
   tier,
   formData,
   update,
-  onExchangeSelect,
-  onByowAddressChange,
+  onAddressChange,
+  onThirdwebConnected,
 }: {
   tier: Tier;
   formData: FormData;
   update: (partial: Partial<FormData>) => void;
-  onExchangeSelect: (id: string) => void;
-  onByowAddressChange: (addr: string) => void;
+  onAddressChange: (addr: string) => void;
+  onThirdwebConnected: (address: string, authMethod: string) => void;
 }) {
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-bold text-white">
-          {tier === "quick_start" && "Quick Start Setup"}
-          {tier === "byoe" && "Exchange Setup"}
-          {tier === "byow" && "Wallet Setup"}
-          {tier === "custom" && "Custom Setup"}
+          {tier === "new_to_crypto" && "Create Your Wallet"}
+          {tier === "has_wallet" && "Enter Your Wallet"}
+          {tier === "power_user" && "Custom Setup"}
         </h2>
         <p className="text-zinc-400">
-          {tier === "quick_start" && "Your smart wallet will be ready in seconds."}
-          {tier === "byoe" && "Route payments to your exchange account."}
-          {tier === "byow" && "Receive payments to your own wallet."}
-          {tier === "custom" && "Configure your exact settlement preferences."}
+          {tier === "new_to_crypto" && "Create a self-custodial wallet in seconds using social login."}
+          {tier === "has_wallet" && "Paste your wallet address and we'll detect the chain automatically."}
+          {tier === "power_user" && "Configure your exact settlement preferences."}
         </p>
       </div>
 
       <Card className="p-6">
-        {tier === "quick_start" && <ConfigQuickStart />}
-        {tier === "byoe" && (
-          <ConfigBYOE
+        {tier === "new_to_crypto" && (
+          <ConfigNewToCrypto
             formData={formData}
-            onExchangeSelect={onExchangeSelect}
-            update={update}
+            onWalletConnected={onThirdwebConnected}
           />
         )}
-        {tier === "byow" && (
-          <ConfigBYOW
+        {tier === "has_wallet" && (
+          <ConfigHasWallet
             formData={formData}
             update={update}
-            onAddressChange={onByowAddressChange}
+            onAddressChange={onAddressChange}
           />
         )}
-        {tier === "custom" && <ConfigCustom formData={formData} update={update} />}
+        {tier === "power_user" && (
+          <ConfigPowerUser formData={formData} update={update} />
+        )}
       </Card>
     </div>
   );
 }
 
-// --- Quick Start ---
+// --- Tier 1: New to Crypto (thirdweb embedded wallet) ---
 
-function ConfigQuickStart() {
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-        <Shield className="h-5 w-5 text-blue-400 shrink-0" />
-        <div className="text-sm">
-          <p className="text-blue-300 font-medium">
-            Base Network + USDC Settlement
-          </p>
-          <p className="text-blue-300/70 mt-0.5">
-            Cheapest fees, native USDC support. Payments settle automatically.
-          </p>
-        </div>
-      </div>
-      <div className="rounded-lg bg-zinc-800/50 border border-zinc-700/50 p-4 space-y-3">
-        <div className="flex justify-between text-sm">
-          <span className="text-zinc-400">Network</span>
-          <span className="text-white font-medium">Base</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-zinc-400">Settlement Token</span>
-          <span className="text-white font-medium">USDC</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-zinc-400">Wallet Type</span>
-          <span className="text-white font-medium">Smart Wallet (Passkey)</span>
-        </div>
-      </div>
-      <p className="text-xs text-zinc-500">
-        Smart wallet setup coming soon — using default Base USDC settlement for
-        now. Your wallet will be upgraded automatically when available.
-      </p>
-    </div>
-  );
-}
-
-// --- BYOE ---
-
-function ConfigBYOE({
+function ConfigNewToCrypto({
   formData,
-  onExchangeSelect,
-  update,
+  onWalletConnected,
 }: {
   formData: FormData;
-  onExchangeSelect: (id: string) => void;
-  update: (partial: Partial<FormData>) => void;
+  onWalletConnected: (address: string, authMethod: string) => void;
 }) {
-  const selectedExchange = EXCHANGES.find(
-    (e) => e.id === formData.exchangeName
-  );
-  const chain = selectedExchange
-    ? CHAINS[selectedExchange.chain]
-    : null;
+  const [showWhatIsWallet, setShowWhatIsWallet] = useState(false);
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label>Select your exchange</Label>
-        <Select value={formData.exchangeName} onValueChange={onExchangeSelect}>
-          <SelectTrigger>
-            <SelectValue placeholder="Choose an exchange..." />
-          </SelectTrigger>
-          <SelectContent>
-            {EXCHANGES.map((ex) => (
-              <SelectItem key={ex.id} value={ex.id}>
-                {ex.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <div className="space-y-5">
+      {/* Self-custody explainer */}
+      <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+        <Shield className="h-5 w-5 text-blue-400 shrink-0 mt-0.5" />
+        <div className="text-sm">
+          <p className="text-blue-300 font-medium">
+            Your wallet is yours. We never have access to your funds or keys.
+          </p>
+          <p className="text-blue-300/70 mt-1">
+            Your wallet is secured via MPC (Multi-Party Computation). Even if
+            goBlink is compromised, no one can access your funds.
+          </p>
+        </div>
       </div>
 
-      {selectedExchange && chain && (
-        <>
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-violet-500/10 border border-violet-500/20">
-            <Building2 className="h-5 w-5 text-violet-400 shrink-0" />
-            <p className="text-sm text-violet-300">
-              Recommended: <span className="font-medium">{selectedExchange.token}</span> on{" "}
-              <span className="font-medium">{chain.name}</span> for{" "}
-              {selectedExchange.name}
-            </p>
-          </div>
+      {/* Thirdweb ConnectButton placeholder */}
+      <div className="space-y-3">
+        <Label>Create or connect a wallet</Label>
+        <div id="thirdweb-connect-container">
+          <ThirdwebConnectWrapper onConnected={onWalletConnected} />
+        </div>
+      </div>
 
-          <div className="space-y-2">
-            <Label>
-              Paste your {selectedExchange.name} deposit address for{" "}
-              {selectedExchange.token} on {chain.name}
-            </Label>
-            <Input
-              placeholder={
-                EVM_CHAINS.includes(selectedExchange.chain)
-                  ? "0x..."
-                  : "Enter deposit address"
-              }
-              value={formData.walletAddress}
-              onChange={(e) => update({ walletAddress: e.target.value.trim() })}
-            />
-            {formData.walletAddress &&
-              !isValidAddress(
-                formData.walletAddress,
-                selectedExchange.chain
-              ) && (
-                <p className="text-xs text-red-400 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  Invalid address format for {chain.name}
-                </p>
-              )}
+      {/* Show captured address */}
+      {formData.walletAddress && (
+        <div className="rounded-lg bg-zinc-800/50 border border-zinc-700/50 p-4 space-y-3">
+          <div className="flex justify-between text-sm">
+            <span className="text-zinc-400">Your wallet address</span>
+            <span className="text-white font-mono text-xs truncate max-w-[240px]">
+              {formData.walletAddress}
+            </span>
           </div>
-        </>
+          <div className="flex justify-between text-sm">
+            <span className="text-zinc-400">Network</span>
+            <span className="text-white font-medium">Base</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-zinc-400">Settlement token</span>
+            <span className="text-white font-medium">USDC</span>
+          </div>
+        </div>
+      )}
+
+      {/* What is a wallet? */}
+      <button
+        onClick={() => setShowWhatIsWallet(!showWhatIsWallet)}
+        className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
+      >
+        <HelpCircle className="h-4 w-4" />
+        What is a wallet?
+      </button>
+
+      {showWhatIsWallet && (
+        <div className="rounded-lg bg-zinc-800/50 border border-zinc-700/50 p-4 space-y-2 text-sm text-zinc-300">
+          <p>
+            A crypto wallet is like a digital bank account that only you control.
+            It has a public address (like an account number) that anyone can send
+            funds to, and private keys (like a password) that only you have.
+          </p>
+          <p>
+            With social login, your private keys are split across multiple servers
+            using MPC technology. No single party — including goBlink — can ever
+            reconstruct your full key. You sign in with Google, Apple, or email,
+            and your wallet is created automatically.
+          </p>
+        </div>
       )}
     </div>
   );
 }
 
-// --- BYOW ---
+// --- Thirdweb Connect Wrapper ---
+// Isolated component for thirdweb integration — can be swapped later
 
-function ConfigBYOW({
+function ThirdwebConnectWrapper({
+  onConnected,
+}: {
+  onConnected: (address: string, authMethod: string) => void;
+}) {
+  const [manualAddress, setManualAddress] = useState("");
+  const [authMethod, setAuthMethod] = useState<string>("");
+  const clientId = typeof window !== "undefined"
+    ? ((window as unknown) as Record<string, unknown>).__THIRDWEB_CLIENT_ID as string | undefined
+    : undefined;
+
+  // If thirdweb client ID is not configured, show a manual fallback
+  // In production, this would use <ConnectButton /> from @thirdweb-dev/react
+  const hasThirdweb = !!clientId || !!process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID;
+
+  if (hasThirdweb) {
+    // Thirdweb integration point — renders the actual ConnectButton
+    // This will be wired up once the ThirdwebProvider is in the layout
+    return (
+      <div className="space-y-3">
+        <div
+          id="thirdweb-connect-button"
+          className="flex items-center justify-center p-4 rounded-lg border-2 border-dashed border-zinc-700 bg-zinc-900/50"
+        >
+          <p className="text-sm text-zinc-400">
+            thirdweb ConnectButton will render here when ThirdwebProvider is configured.
+          </p>
+        </div>
+        <p className="text-xs text-zinc-500">
+          Sign in with Google, Apple, or email to create your wallet instantly.
+        </p>
+      </div>
+    );
+  }
+
+  // Manual fallback for development / when thirdweb is not configured
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+        <Info className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+        <p className="text-sm text-amber-300">
+          Social login wallet creation requires thirdweb configuration.
+          For now, enter a wallet address manually or set{" "}
+          <code className="text-xs bg-zinc-800 px-1 rounded">
+            NEXT_PUBLIC_THIRDWEB_CLIENT_ID
+          </code>{" "}
+          in your environment.
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Input
+          placeholder="0x... (your Base wallet address)"
+          value={manualAddress}
+          onChange={(e) => setManualAddress(e.target.value.trim())}
+        />
+        <Select value={authMethod} onValueChange={setAuthMethod}>
+          <SelectTrigger>
+            <SelectValue placeholder="How did you create this wallet?" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="google">Google</SelectItem>
+            <SelectItem value="apple">Apple</SelectItem>
+            <SelectItem value="email">Email</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          className="w-full"
+          disabled={!isEvmAddress(manualAddress) || !authMethod}
+          onClick={() => onConnected(manualAddress, authMethod)}
+        >
+          Use This Address
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// --- Tier 2: Has Wallet ---
+
+function ConfigHasWallet({
   formData,
   update,
   onAddressChange,
@@ -919,7 +968,7 @@ function ConfigBYOW({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label>Enter your wallet address</Label>
+        <Label>Paste your wallet address</Label>
         <Input
           placeholder="0x... or Solana/NEAR/Sui address"
           value={formData.walletAddress}
@@ -940,13 +989,11 @@ function ConfigBYOW({
 
       {detected === "evm" && (
         <div className="space-y-2">
-          <Label>Select EVM chain</Label>
+          <Label>Select chain (Base recommended)</Label>
           <Select
             value={formData.evmChain}
             onValueChange={(val) => {
-              update({ evmChain: val, settlementChain: val });
-              // Reset token to USDC for new chain
-              update({ settlementToken: "USDC" });
+              update({ evmChain: val, settlementChain: val, settlementToken: "USDC" });
             }}
           >
             <SelectTrigger>
@@ -955,7 +1002,7 @@ function ConfigBYOW({
             <SelectContent>
               {EVM_CHAINS.map((c) => (
                 <SelectItem key={c} value={c}>
-                  {CHAINS[c].name}
+                  {CHAINS[c].name} {c === "base" ? "(Recommended)" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -976,20 +1023,29 @@ function ConfigBYOW({
             <SelectContent>
               {tokens.map((t) => (
                 <SelectItem key={t} value={t}>
-                  {t}
+                  {t} {t === "USDC" ? "(Recommended)" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
       )}
+
+      {/* Zero-custody reminder */}
+      <div className="flex items-start gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+        <Shield className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+        <p className="text-sm text-emerald-300">
+          We only store your public wallet address for settlement. Your keys stay
+          with you.
+        </p>
+      </div>
     </div>
   );
 }
 
-// --- Custom ---
+// --- Tier 3: Power User ---
 
-function ConfigCustom({
+function ConfigPowerUser({
   formData,
   update,
 }: {
@@ -1073,6 +1129,11 @@ function ConfigCustom({
               {CHAINS[formData.settlementChain]?.name}
             </p>
           )}
+      </div>
+
+      {/* Offramp guide teaser */}
+      <div className="pt-2">
+        <ExchangeOfframpGuide compact />
       </div>
     </div>
   );
@@ -1277,44 +1338,39 @@ function StepDone() {
             <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center mb-3">
               <ShoppingCart className="h-5 w-5 text-blue-400" />
             </div>
-            <h3 className="font-medium text-white text-sm">
-              Create a payment link
+            <h3 className="font-semibold text-white text-sm">
+              Create a Payment Link
             </h3>
-            <p className="text-xs text-zinc-500 mt-1">
-              Share a link and start getting paid.
+            <p className="text-xs text-zinc-400 mt-1">
+              Generate a link customers can use to pay you.
             </p>
           </Card>
         </Link>
 
-        <a
-          href="https://docs.goblink.io/plugins/woocommerce"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group"
-        >
+        <Link href="/dashboard/settings" className="group">
           <Card className="p-4 h-full transition-all group-hover:border-violet-500/50 group-hover:bg-violet-500/5">
             <div className="h-10 w-10 rounded-lg bg-violet-500/10 flex items-center justify-center mb-3">
               <ExternalLink className="h-5 w-5 text-violet-400" />
             </div>
-            <h3 className="font-medium text-white text-sm">
-              WooCommerce plugin
+            <h3 className="font-semibold text-white text-sm">
+              Integrate the API
             </h3>
-            <p className="text-xs text-zinc-500 mt-1">
-              Add crypto checkout to your store.
+            <p className="text-xs text-zinc-400 mt-1">
+              Use our REST API to create payments programmatically.
             </p>
           </Card>
-        </a>
+        </Link>
 
         <Link href="/dashboard" className="group">
           <Card className="p-4 h-full transition-all group-hover:border-emerald-500/50 group-hover:bg-emerald-500/5">
             <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-3">
               <LayoutDashboard className="h-5 w-5 text-emerald-400" />
             </div>
-            <h3 className="font-medium text-white text-sm">
-              Explore your dashboard
+            <h3 className="font-semibold text-white text-sm">
+              Explore Dashboard
             </h3>
-            <p className="text-xs text-zinc-500 mt-1">
-              View payments, settings, and more.
+            <p className="text-xs text-zinc-400 mt-1">
+              View your payments, analytics, and settings.
             </p>
           </Card>
         </Link>

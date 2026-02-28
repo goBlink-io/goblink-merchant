@@ -25,6 +25,7 @@ export async function PATCH(request: NextRequest) {
     settlement_chain,
     settlement_token,
     exchange_name,
+    thirdweb_auth_method,
     currency,
     timezone,
   } = body as {
@@ -33,11 +34,17 @@ export async function PATCH(request: NextRequest) {
     settlement_chain?: string;
     settlement_token?: string;
     exchange_name?: string;
+    thirdweb_auth_method?: string;
     currency?: string;
     timezone?: string;
   };
 
-  if (!tier || !["quick_start", "byoe", "byow", "custom"].includes(tier)) {
+  const validTiers = [
+    "new_to_crypto", "has_wallet", "power_user",
+    // Legacy tiers (accept for backwards compat during migration)
+    "quick_start", "byoe", "byow", "custom",
+  ];
+  if (!tier || !validTiers.includes(tier)) {
     return apiError("Invalid onboarding tier", 400);
   }
 
@@ -50,6 +57,7 @@ export async function PATCH(request: NextRequest) {
   if (settlement_chain) updateData.settlement_chain = settlement_chain;
   if (settlement_token) updateData.settlement_token = settlement_token;
   if (exchange_name !== undefined) updateData.exchange_name = exchange_name;
+  if (thirdweb_auth_method) updateData.thirdweb_auth_method = thirdweb_auth_method;
   if (currency) updateData.currency = currency;
   if (timezone) updateData.timezone = timezone;
 
