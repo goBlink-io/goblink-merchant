@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard,
   CreditCard,
@@ -16,8 +17,9 @@ import {
   Zap,
   ChevronLeft,
   Menu,
+  LifeBuoy,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const navItems = [
   {
@@ -36,6 +38,11 @@ const navItems = [
     icon: Link2,
   },
   {
+    title: "Support",
+    href: "/dashboard/support",
+    icon: LifeBuoy,
+  },
+  {
     title: "Settings",
     href: "/dashboard/settings",
     icon: Settings,
@@ -48,6 +55,22 @@ export function Sidebar() {
   const supabase = createClient();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [unresolvedCount, setUnresolvedCount] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/v1/internal/tickets")
+      .then((res) => res.ok ? res.json() : null)
+      .then((tickets) => {
+        if (Array.isArray(tickets)) {
+          setUnresolvedCount(
+            tickets.filter((t: { status: string }) =>
+              ["open", "in_progress", "waiting_on_merchant"].includes(t.status)
+            ).length
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -130,7 +153,16 @@ export function Sidebar() {
                     )}
                   >
                     <item.icon className="h-5 w-5 shrink-0" />
-                    {!collapsed && <span>{item.title}</span>}
+                    {!collapsed && (
+                      <span className="flex-1 flex items-center justify-between">
+                        {item.title}
+                        {item.title === "Support" && unresolvedCount > 0 && (
+                          <Badge className="bg-blue-600/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0 ml-auto">
+                            {unresolvedCount}
+                          </Badge>
+                        )}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

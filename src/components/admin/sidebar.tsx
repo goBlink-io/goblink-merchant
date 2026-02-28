@@ -21,8 +21,9 @@ import {
   ChevronLeft,
   Menu,
   Shield,
+  Ticket,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const navItems = [
   { title: "Overview", href: "/admin", icon: LayoutDashboard },
@@ -30,6 +31,7 @@ const navItems = [
   { title: "Payments", href: "/admin/payments", icon: CreditCard },
   { title: "Revenue", href: "/admin/revenue", icon: DollarSign },
   { title: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+  { title: "Tickets", href: "/admin/tickets", icon: Ticket },
   { title: "Issues", href: "/admin/issues", icon: AlertTriangle },
   { title: "System", href: "/admin/system", icon: Server },
 ];
@@ -40,6 +42,20 @@ export function AdminSidebar() {
   const supabase = createClient();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [openTicketCount, setOpenTicketCount] = useState(0);
+
+  useEffect(() => {
+    fetch("/api/admin/tickets")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.stats) {
+          setOpenTicketCount(
+            (data.stats.open ?? 0) + (data.stats.in_progress ?? 0) + (data.stats.waiting_on_merchant ?? 0)
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -125,7 +141,16 @@ export function AdminSidebar() {
                     )}
                   >
                     <item.icon className="h-5 w-5 shrink-0" />
-                    {!collapsed && <span>{item.title}</span>}
+                    {!collapsed && (
+                      <span className="flex-1 flex items-center justify-between">
+                        {item.title}
+                        {item.title === "Tickets" && openTicketCount > 0 && (
+                          <Badge className="bg-violet-600/20 text-violet-400 border-violet-500/30 text-[10px] px-1.5 py-0 ml-auto">
+                            {openTicketCount}
+                          </Badge>
+                        )}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
