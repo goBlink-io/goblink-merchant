@@ -47,3 +47,118 @@ body {
 .animate-fade-in-up {
   animation: fadeInUp 0.3s ease-out;
 }
+
+/* ============================================================
+   Print styles — branded layout for Ctrl+P
+   ============================================================ */
+@media print {
+  /* Reset dark background for printing */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt;
+  }
+
+  /* Hide non-essential elements */
+  aside,
+  nav,
+  footer,
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  /* Remove sidebar margin from main content */
+  main,
+  [class*="ml-16"],
+  [class*="ml-64"] {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Show branded header */
+  .print-header {
+    display: block !important;
+  }
+
+  /* Cards: remove dark bg, add subtle border */
+  [class*="bg-zinc"],
+  [class*="bg-card"] {
+    background: white !important;
+    border: 1px solid #e4e4e7 !important;
+  }
+
+  /* Text colors for readability */
+  [class*="text-white"],
+  [class*="text-zinc-300"],
+  [class*="text-zinc-200"] {
+    color: black !important;
+  }
+
+  [class*="text-zinc-400"],
+  [class*="text-zinc-500"] {
+    color: #52525b !important;
+  }
+
+  /* Borders */
+  [class*="border-zinc"] {
+    border-color: #e4e4e7 !important;
+  }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    border-bottom: 1px solid #e4e4e7;
+    padding: 6px 8px;
+    text-align: left;
+  }
+
+  /* Badge colors stay visible */
+  [class*="bg-emerald"] {
+    background: #d1fae5 !important;
+    color: #065f46 !important;
+  }
+
+  [class*="bg-red"] {
+    background: #fee2e2 !important;
+    color: #991b1b !important;
+  }
+
+  [class*="bg-blue"] {
+    background: #dbeafe !important;
+    color: #1e40af !important;
+  }
+
+  [class*="bg-yellow"] {
+    background: #fef3c7 !important;
+    color: #92400e !important;
+  }
+
+  [class*="bg-purple"] {
+    background: #ede9fe !important;
+    color: #5b21b6 !important;
+  }
+
+  /* Page breaks */
+  .page-break-before {
+    page-break-before: always;
+  }
+
+  /* Invoice detail: clean layout */
+  .invoice-detail {
+    padding: 20px;
+  }
+
+  /* Add page footer with branding */
+  @page {
+    margin: 2cm;
+    @bottom-center {
+      content: "goBlink Merchant — goblink.io";
+    }
+  }
+}

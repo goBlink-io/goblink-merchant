@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { TableSkeleton } from "@/components/admin/loading";
 import { getMerchantDetail } from "@/lib/admin/queries";
+import { getServiceClient } from "@/lib/service-client";
 import { formatCurrency, formatDate, getStatusColor, truncateAddress } from "@/lib/utils";
 import { SuspendButton } from "./suspend-button";
 import Link from "next/link";
@@ -156,6 +157,9 @@ async function MerchantDetailContent({ id }: { id: string }) {
         </CardContent>
       </Card>
 
+      {/* Audit Log */}
+      <AuditLogSection merchantId={merchant.id} />
+
       {/* Payments */}
       <Card>
         <CardHeader>
@@ -200,6 +204,76 @@ async function MerchantDetailContent({ id }: { id: string }) {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+const auditActionLabels: Record<string, string> = {
+  "api_key.created": "API key created",
+  "api_key.deleted": "API key deleted",
+  "settings.updated": "Settings updated",
+  "webhook.created": "Webhook created",
+  "webhook.deleted": "Webhook deleted",
+  "payment.refunded": "Payment refunded",
+  "payment.partially_refunded": "Payment partially refunded",
+  "invoice.created": "Invoice created",
+  "invoice.sent": "Invoice sent",
+  "invoice.marked_paid": "Invoice marked paid",
+  "invoice.updated": "Invoice updated",
+  "invoice.deleted": "Invoice deleted",
+};
+
+async function AuditLogSection({ merchantId }: { merchantId: string }) {
+  const svc = getServiceClient();
+  const { data: logs } = await svc
+    .from("audit_logs")
+    .select("id, action, resource_type, resource_id, ip_address, created_at")
+    .eq("merchant_id", merchantId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Audit Log</CardTitle>
+        <CardDescription>Recent activity for this merchant</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {!logs || logs.length === 0 ? (
+          <p className="text-zinc-500 text-center py-4">No audit logs</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Action</TableHead>
+                <TableHead>Resource</TableHead>
+                <TableHead>IP</TableHead>
+                <TableHead>Date</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell className="text-sm">
+                    {auditActionLabels[log.action] || log.action}
+                  </TableCell>
+                  <TableCell className="text-xs text-zinc-400 font-mono">
+                    {log.resource_type
+                      ? `${log.resource_type}: ${(log.resource_id || "").slice(0, 8)}`
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-xs text-zinc-500">
+                    {log.ip_address || "—"}
+                  </TableCell>
+                  <TableCell className="text-xs text-zinc-500">
+                    {formatDate(log.created_at)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

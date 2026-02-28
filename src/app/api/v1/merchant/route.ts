@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { validateApiKey } from "@/lib/api-auth";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
+import { logAudit } from "@/lib/audit";
 
 // GET /api/v1/merchant — Get merchant profile
 export async function GET(request: NextRequest) {
@@ -85,6 +86,16 @@ export async function PATCH(request: NextRequest) {
   if (error) {
     return apiError(`Failed to update merchant: ${error.message}`, 500);
   }
+
+  logAudit({
+    merchantId: auth.merchantId,
+    actor: auth.keyId,
+    action: "settings.updated",
+    resourceType: "merchant",
+    resourceId: auth.merchantId,
+    metadata: { fields: Object.keys(updates) },
+    ipAddress: request.headers.get("x-forwarded-for") ?? undefined,
+  });
 
   return apiSuccess({
     id: merchant.id,
