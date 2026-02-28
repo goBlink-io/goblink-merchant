@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { Sidebar } from "@/components/dashboard/sidebar";
+import { ChatWrapper } from "@/components/chatbot/chat-wrapper";
 
 export default function DashboardLayout({
   children,
@@ -13,6 +15,9 @@ export default function DashboardLayout({
           {children}
         </div>
       </main>
+      <Suspense fallback={null}>
+        <ChatWrapper />
+      </Suspense>
     </div>
   );
 }
