@@ -53,6 +53,7 @@
     "react-dom": "19.2.4",
     "recharts": "^3.7.0",
     "resend": "^6.9.3",
+    "sonner": "^2.0.7",
     "starknet": "^9.2.1",
     "starknetkit": "^3.4.3",
     "tailwind-merge": "^3.5.0",

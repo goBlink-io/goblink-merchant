@@ -7,10 +7,12 @@ import { PaymentFailedEmail } from "./templates/payment-failed";
 import { TicketReplyEmail } from "./templates/ticket-reply";
 import { WithdrawalCompleteEmail } from "./templates/withdrawal-complete";
 import { WeeklySummaryEmail } from "./templates/weekly-summary";
+import { RefundIssuedEmail } from "./templates/refund-issued";
 
 export type NotificationType =
   | "payment_received"
   | "payment_failed"
+  | "refund_issued"
   | "ticket_reply"
   | "withdrawal_complete"
   | "weekly_summary"
@@ -19,6 +21,7 @@ export type NotificationType =
 interface NotificationPreferences {
   payment_received: boolean;
   payment_failed: boolean;
+  refund_issued: boolean;
   ticket_reply: boolean;
   withdrawal_complete: boolean;
   weekly_summary: boolean;
@@ -143,6 +146,20 @@ function buildFallbackTemplate(type: NotificationType, data: Record<string, unkn
         }),
       };
 
+    case "refund_issued":
+      return {
+        subject: `Refund issued: $${data.amount} ${data.currency}`,
+        react: React.createElement(RefundIssuedEmail, {
+          amount: data.amount as string,
+          currency: data.currency as string,
+          originalAmount: data.originalAmount as string,
+          reason: (data.reason as string) || null,
+          paymentId: data.paymentId as string,
+          refundId: data.refundId as string,
+          time: data.time as string,
+        }),
+      };
+
     case "ticket_reply":
       return {
         subject: `New reply on your support ticket: ${data.ticketSubject}`,
@@ -221,6 +238,18 @@ function mapToTemplateVariables(type: NotificationType, data: Record<string, unk
         currency: String(data.currency || ""),
         order_id: String(data.orderId || ""),
         reason: String(data.reason || ""),
+        payment_url: `${dashboardUrl}/payments/${data.paymentId || ""}`,
+        dashboard_url: dashboardUrl,
+      };
+
+    case "refund_issued":
+      return {
+        business_name: businessName,
+        amount: String(data.amount || ""),
+        currency: String(data.currency || ""),
+        original_amount: String(data.originalAmount || ""),
+        reason: String(data.reason || ""),
+        refund_id: String(data.refundId || ""),
         payment_url: `${dashboardUrl}/payments/${data.paymentId || ""}`,
         dashboard_url: dashboardUrl,
       };

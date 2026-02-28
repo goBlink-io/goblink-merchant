@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { CopyButton } from "@/components/dashboard/copy-button";
 import { PaymentShareSection } from "@/components/dashboard/payment-share-section";
+import { PaymentRefundSection } from "@/components/dashboard/payment-refund-section";
 import {
   ArrowLeft,
   Clock,
@@ -224,37 +225,15 @@ export default async function PaymentDetailPage({
             </Card>
           )}
 
-          {/* Refunds */}
-          {refunds && refunds.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Refunds</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {refunds.map((refund) => (
-                    <div
-                      key={refund.id}
-                      className="flex items-center justify-between py-2 border-b border-zinc-800/50 last:border-0"
-                    >
-                      <div>
-                        <p className="text-sm text-white">
-                          {formatCurrency(Number(refund.amount), refund.currency)}
-                        </p>
-                        <p className="text-xs text-zinc-500">
-                          {formatDate(refund.created_at)}
-                          {refund.reason && ` — ${refund.reason}`}
-                        </p>
-                      </div>
-                      <Badge className={getStatusColor(refund.status)} variant="outline">
-                        {refund.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Refund Action + History */}
+          <PaymentRefundSection
+            paymentId={payment.id}
+            paymentStatus={payment.status}
+            paymentAmount={Number(payment.amount)}
+            currency={payment.currency}
+            initialRefunds={refunds ?? []}
+            isTest={!!payment.is_test}
+          />
 
           {/* Metadata */}
           {payment.metadata && Object.keys(payment.metadata).length > 0 && (
