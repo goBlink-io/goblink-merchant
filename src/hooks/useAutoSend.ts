@@ -26,6 +26,7 @@ interface UseAutoSendOptions {
   paymentId: string;
   chainId: string;
   customerEmail?: string; // P2-E: optional customer email for receipt
+  customFields?: Record<string, string>; // HXF 3.4: custom checkout field values
   onSuccess: (txHash: string) => void;
   onError: (error: string) => void;
 }
@@ -44,7 +45,7 @@ function isNativeToken(token: Token): boolean {
   );
 }
 
-export function useAutoSend({ paymentId, chainId, customerEmail, onSuccess, onError }: UseAutoSendOptions) {
+export function useAutoSend({ paymentId, chainId, customerEmail, customFields, onSuccess, onError }: UseAutoSendOptions) {
   const [status, setStatus] = useState<AutoSendStatus>("idle");
   const [txHash, setTxHash] = useState<string | null>(null);
 
@@ -104,6 +105,7 @@ export function useAutoSend({ paymentId, chainId, customerEmail, onSuccess, onEr
             payerAddress: walletAddress,
             payerChain: chainId,
             ...(customerEmail ? { customerEmail } : {}),
+            ...(customFields && Object.keys(customFields).length > 0 ? { customFields } : {}),
           }),
         });
 
@@ -126,7 +128,7 @@ export function useAutoSend({ paymentId, chainId, customerEmail, onSuccess, onEr
         onError(message);
       }
     },
-    [walletAddress, sendTransactionAsync, writeContractAsync, paymentId, chainId, customerEmail, onSuccess, onError]
+    [walletAddress, sendTransactionAsync, writeContractAsync, paymentId, chainId, customerEmail, customFields, onSuccess, onError]
   );
 
   const reset = useCallback(() => {

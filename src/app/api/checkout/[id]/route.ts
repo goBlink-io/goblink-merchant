@@ -55,7 +55,7 @@ export async function GET(
   // Fetch merchant info — only needed fields
   const { data: merchant } = await supabase
     .from("merchants")
-    .select("business_name, logo_url, brand_color, wallet_address, settlement_token, settlement_chain, show_powered_badge")
+    .select("business_name, logo_url, brand_color, wallet_address, settlement_token, settlement_chain, show_powered_badge, custom_checkout_fields")
     .eq("id", payment.merchant_id)
     .single();
 
@@ -87,6 +87,7 @@ export async function GET(
           settlementToken: merchant.settlement_token,
           settlementChain: merchant.settlement_chain,
           showPoweredBadge: merchant.show_powered_badge ?? true,
+          customCheckoutFields: merchant.custom_checkout_fields ?? [],
         }
       : null,
   });

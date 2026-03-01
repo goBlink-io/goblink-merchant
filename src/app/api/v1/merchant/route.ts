@@ -1,12 +1,15 @@
 import { NextRequest } from "next/server";
-import { validateApiKey } from "@/lib/api-auth";
+import { validateApiKey, isApiForbidden } from "@/lib/api-auth";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
 
 // GET /api/v1/merchant — Get merchant profile
 export async function GET(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip"));
+  if (isApiForbidden(auth)) {
+    return apiError("IP address not allowed for this API key", 403);
+  }
   if (!auth) {
     return apiError("Invalid or missing API key", 401);
   }
@@ -40,7 +43,10 @@ export async function GET(request: NextRequest) {
 
 // PATCH /api/v1/merchant — Update merchant settings
 export async function PATCH(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip"));
+  if (isApiForbidden(auth)) {
+    return apiError("IP address not allowed for this API key", 403);
+  }
   if (!auth) {
     return apiError("Invalid or missing API key", 401);
   }
@@ -61,7 +67,34 @@ export async function PATCH(request: NextRequest) {
     settlementToken: "settlement_token",
     settlementChain: "settlement_chain",
     brandColor: "brand_color",
+    customCheckoutFields: "custom_checkout_fields",
   };
+
+  // Validate custom_checkout_fields if present
+  if ("customCheckoutFields" in body) {
+    const fields = body.customCheckoutFields;
+    if (!Array.isArray(fields)) {
+      return apiError("customCheckoutFields must be an array", 400);
+    }
+    if (fields.length > 5) {
+      return apiError("Maximum 5 custom checkout fields allowed", 400);
+    }
+    const validTypes = ["text", "email", "textarea", "select"];
+    for (const field of fields) {
+      if (!field || typeof field !== "object") {
+        return apiError("Each field must be an object", 400);
+      }
+      if (!field.label || typeof field.label !== "string" || field.label.trim().length === 0) {
+        return apiError("Each field must have a non-empty label", 400);
+      }
+      if (!validTypes.includes(field.type)) {
+        return apiError(`Field type must be one of: ${validTypes.join(", ")}`, 400);
+      }
+      if (field.type === "select" && (!Array.isArray(field.options) || field.options.length === 0)) {
+        return apiError("Select fields must have a non-empty options array", 400);
+      }
+    }
+  }
 
   const updates: Record<string, unknown> = {};
   for (const [apiField, dbField] of Object.entries(allowedFields)) {

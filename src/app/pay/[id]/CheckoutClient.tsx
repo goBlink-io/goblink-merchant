@@ -62,6 +62,13 @@ interface PaymentData {
   isTest?: boolean;
 }
 
+interface CustomCheckoutField {
+  label: string;
+  type: "text" | "email" | "textarea" | "select";
+  required: boolean;
+  options?: string[];
+}
+
 interface MerchantData {
   businessName: string;
   logoUrl: string | null;
@@ -70,6 +77,7 @@ interface MerchantData {
   settlementToken: string | null;
   settlementChain: string | null;
   showPoweredBadge?: boolean;
+  customCheckoutFields?: CustomCheckoutField[];
 }
 
 interface Token {
@@ -176,6 +184,10 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
     // Default to QR if no wallet connected
     "wallet"
   );
+
+  // HXF 3.4: Custom checkout fields
+  const customFields = merchant?.customCheckoutFields ?? [];
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
 
   const handleSimulate = async () => {
     setSimulating(true);
@@ -404,6 +416,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
     paymentId,
     chainId: selectedChain.id,
     customerEmail: wantReceipt ? customerEmail : undefined, // P2-E
+    customFields: Object.keys(customFieldValues).length > 0 ? customFieldValues : undefined, // HXF 3.4
     onSuccess: () => {
       setStep("processing");
     },
@@ -413,9 +426,18 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
     },
   });
 
+  // HXF 3.4: Check if all required custom fields are filled
+  const customFieldsValid = customFields.every(
+    (f) => !f.required || (customFieldValues[f.label] ?? "").trim().length > 0
+  );
+
   // --- Pay action ---
   const handlePay = async () => {
     if (!selectedToken || !walletAddress || !destinationAssetId) return;
+    if (!customFieldsValid) {
+      setTxError("Please fill in all required fields");
+      return;
+    }
     setTxSubmitting(true);
     setTxError(null);
     resetAutoSend();
@@ -477,7 +499,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
 
     try {
       // P2-E: Include customer email if provided
-      const completePayload: Record<string, string> = {
+      const completePayload: Record<string, unknown> = {
         sendTxHash: txHash || "pending",
         depositAddress,
         payerAddress: walletAddress,
@@ -485,6 +507,10 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
       };
       if (customerEmail && wantReceipt) {
         completePayload.customerEmail = customerEmail;
+      }
+      // HXF 3.4: Include custom field values
+      if (Object.keys(customFieldValues).length > 0) {
+        completePayload.customFields = customFieldValues;
       }
 
       const res = await fetch(`/api/checkout/${paymentId}/complete`, {
@@ -849,6 +875,54 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
         />
       </div>
 
+      {/* HXF 3.4: Custom checkout fields */}
+      {customFields.length > 0 && (
+        <div className="mt-4 space-y-3">
+          {customFields.map((field) => (
+            <div key={field.label} className="space-y-1.5">
+              <label className="text-sm text-zinc-300">
+                {field.label}
+                {field.required && <span className="text-red-400 ml-1">*</span>}
+              </label>
+              {field.type === "textarea" ? (
+                <textarea
+                  value={customFieldValues[field.label] ?? ""}
+                  onChange={(e) =>
+                    setCustomFieldValues((prev) => ({ ...prev, [field.label]: e.target.value }))
+                  }
+                  className="w-full rounded-lg bg-zinc-800/80 border border-zinc-700 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                  rows={3}
+                  placeholder={field.label}
+                />
+              ) : field.type === "select" ? (
+                <select
+                  value={customFieldValues[field.label] ?? ""}
+                  onChange={(e) =>
+                    setCustomFieldValues((prev) => ({ ...prev, [field.label]: e.target.value }))
+                  }
+                  className="w-full rounded-lg bg-zinc-800/80 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value="">Select...</option>
+                  {(field.options ?? []).map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type={field.type === "email" ? "email" : "text"}
+                  value={customFieldValues[field.label] ?? ""}
+                  onChange={(e) =>
+                    setCustomFieldValues((prev) => ({ ...prev, [field.label]: e.target.value }))
+                  }
+                  className="w-full rounded-lg bg-zinc-800/80 border border-zinc-700 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder={field.label}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="mt-4 space-y-4">
         {/* Chain selector with balances */}
         <ChainSelector
@@ -987,7 +1061,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
         ) : (
           <button
             onClick={handlePay}
-            disabled={!selectedToken || quoteLoading || !!quoteError || txSubmitting || isExpired || autoSendStatus === "sending"}
+            disabled={!selectedToken || quoteLoading || !!quoteError || txSubmitting || isExpired || autoSendStatus === "sending" || !customFieldsValid}
             className="w-full py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-medium hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {txSubmitting || autoSendStatus === "sending" ? (

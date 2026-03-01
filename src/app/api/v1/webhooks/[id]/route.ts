@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { validateApiKey } from "@/lib/api-auth";
+import { validateApiKey, isApiForbidden } from "@/lib/api-auth";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
@@ -10,7 +10,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip"));
+  if (isApiForbidden(auth)) {
+    return apiError("IP address not allowed for this API key", 403);
+  }
   if (!auth) {
     return apiError("Invalid or missing API key", 401);
   }

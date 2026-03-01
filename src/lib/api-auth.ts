@@ -16,8 +16,9 @@ export interface ApiKeyValidation {
 }
 
 export async function validateApiKey(
-  authHeader: string | null
-): Promise<ApiKeyValidation | null> {
+  authHeader: string | null,
+  requestIp?: string | null
+): Promise<ApiKeyValidation | { forbidden: true } | null> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return null;
   }
@@ -35,7 +36,7 @@ export async function validateApiKey(
   const prefix = apiKey.slice(0, apiKey.indexOf("_", 3) + 1 + 8); // e.g., "gb_live_" + first 8 chars
   const { data: keys, error } = await supabase
     .from("api_keys")
-    .select("id, merchant_id, key_hash, is_test")
+    .select("id, merchant_id, key_hash, is_test, allowed_ips")
     .like("key_prefix", `${prefix.slice(0, 12)}%`);
 
   if (error || !keys || keys.length === 0) {
@@ -45,6 +46,15 @@ export async function validateApiKey(
   for (const key of keys) {
     const matches = await bcrypt.compare(apiKey, key.key_hash);
     if (matches) {
+      // IP allowlist check
+      const allowedIps: string[] = key.allowed_ips ?? [];
+      if (allowedIps.length > 0) {
+        const ip = requestIp?.split(",")[0]?.trim();
+        if (!ip || !allowedIps.includes(ip)) {
+          return { forbidden: true };
+        }
+      }
+
       // Update last_used_at
       await supabase
         .from("api_keys")
@@ -60,6 +70,12 @@ export async function validateApiKey(
   }
 
   return null;
+}
+
+export function isApiForbidden(
+  result: ApiKeyValidation | { forbidden: true } | null
+): result is { forbidden: true } {
+  return result !== null && "forbidden" in result;
 }
 
 export async function generateApiKey(
