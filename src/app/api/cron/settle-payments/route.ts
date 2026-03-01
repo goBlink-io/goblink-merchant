@@ -6,6 +6,7 @@ import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
 import { insertNotification } from "@/lib/notifications";
 import { sendCustomerReceiptEmail } from "@/lib/email/customer-receipt";
+import { checkAndAwardMilestones, MILESTONE_LABELS } from "@/lib/milestones";
 
 const FEE_RATE = 0.01; // 1%
 
@@ -117,6 +118,95 @@ export async function GET(request: NextRequest) {
         }
 
         results.settled++;
+
+        // --- First-payment celebration check ---
+        const { data: merchant } = await supabase
+          .from("merchants")
+          .select("first_payment_celebrated")
+          .eq("id", payment.merchant_id)
+          .single();
+
+        if (merchant && !merchant.first_payment_celebrated) {
+          await supabase
+            .from("merchants")
+            .update({ first_payment_celebrated: true })
+            .eq("id", payment.merchant_id);
+
+          insertNotification(
+            payment.merchant_id,
+            "first_payment",
+            "\u{1F389} Your first payment just landed!",
+            "Your first crypto payment is confirmed. Welcome to the future of payments.",
+            `/dashboard/payments/${payment.id}`
+          );
+        }
+
+        // --- Milestone check ---
+        try {
+          const todayStart = new Date();
+          todayStart.setUTCHours(0, 0, 0, 0);
+
+          const [confirmedCount, todayPayments, merchantData] = await Promise.all([
+            supabase
+              .from("payments")
+              .select("id", { count: "exact", head: true })
+              .eq("merchant_id", payment.merchant_id)
+              .eq("status", "confirmed"),
+            supabase
+              .from("payments")
+              .select("net_amount")
+              .eq("merchant_id", payment.merchant_id)
+              .eq("status", "confirmed")
+              .gte("confirmed_at", todayStart.toISOString()),
+            supabase
+              .from("merchants")
+              .select("created_at")
+              .eq("id", payment.merchant_id)
+              .single(),
+          ]);
+
+          const totalPayments = confirmedCount.count ?? 0;
+          const todayRevenue = (todayPayments.data ?? []).reduce(
+            (sum, p) => sum + Number(p.net_amount ?? 0),
+            0
+          );
+
+          // totalRevenue: use totalBalance as proxy (sum of net_amount for confirmed)
+          const { data: revData } = await supabase
+            .from("payments")
+            .select("net_amount")
+            .eq("merchant_id", payment.merchant_id)
+            .eq("status", "confirmed");
+
+          const totalRevenue = (revData ?? []).reduce(
+            (sum, p) => sum + Number(p.net_amount ?? 0),
+            0
+          );
+
+          const newMilestones = await checkAndAwardMilestones(supabase, payment.merchant_id, {
+            totalPayments,
+            todayRevenue,
+            totalRevenue,
+            merchantCreatedAt: merchantData.data?.created_at ?? new Date().toISOString(),
+          });
+
+          for (const key of newMilestones) {
+            const info = MILESTONE_LABELS[key];
+            if (info) {
+              insertNotification(
+                payment.merchant_id,
+                "milestone",
+                info.title,
+                info.body
+              );
+            }
+          }
+        } catch (milestoneErr) {
+          console.error(
+            `[settle-payments] Milestone check failed for ${payment.merchant_id}:`,
+            milestoneErr instanceof Error ? milestoneErr.message : milestoneErr
+          );
+        }
       } else if (status === "FAILED") {
         const { error: updateErr } = await supabase
           .from("payments")

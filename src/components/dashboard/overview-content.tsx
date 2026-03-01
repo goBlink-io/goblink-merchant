@@ -11,6 +11,8 @@ import { QuickStartChecklist } from "@/components/dashboard/quick-start-checklis
 import { GrowthNarrative } from "@/components/dashboard/growth-narrative";
 import { useRealtimePayments, type ConnectionStatus, type RealtimePaymentRecord } from "@/hooks/useRealtimePayments";
 import { showPaymentToast } from "@/components/dashboard/payment-toast";
+import { FirstPaymentModal } from "@/components/dashboard/first-payment-modal";
+import { MilestoneBadge } from "@/components/dashboard/milestone-badge";
 
 interface OverviewData {
   totalBalance: number;
@@ -49,6 +51,18 @@ interface OverviewData {
     lastWeekCount: number;
     monthPaymentCount: number;
   };
+}
+
+interface NotificationRecord {
+  id: string;
+  type: string;
+  link: string | null;
+  read_at: string | null;
+}
+
+interface MilestoneRecord {
+  milestone_key: string;
+  achieved_at: string;
 }
 
 function formatConverted(amountUsd: number, displayCurrency: string, exchangeRate: number): string {
@@ -91,6 +105,8 @@ export function OverviewContent({ data }: { data: OverviewData }) {
   const { isTestMode } = useTestModeContext();
   const [filtered, setFiltered] = useState<OverviewData>(data);
   const [loading, setLoading] = useState(false);
+  const [firstPaymentNotif, setFirstPaymentNotif] = useState<NotificationRecord | null>(null);
+  const [milestones, setMilestones] = useState<MilestoneRecord[]>([]);
 
   useEffect(() => {
     // Re-fetch with test filter
@@ -103,6 +119,29 @@ export function OverviewContent({ data }: { data: OverviewData }) {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [isTestMode]);
+
+  // Fetch first_payment notification + milestones
+  useEffect(() => {
+    fetch("/api/v1/internal/notifications")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d) => {
+        if (!d?.notifications) return;
+        const fp = (d.notifications as NotificationRecord[]).find(
+          (n) => n.type === "first_payment" && !n.read_at
+        );
+        if (fp) setFirstPaymentNotif(fp);
+      })
+      .catch(() => {});
+
+    if (data.merchantId) {
+      fetch(`/api/v1/internal/milestones`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((d) => {
+          if (d?.milestones) setMilestones(d.milestones);
+        })
+        .catch(() => {});
+    }
+  }, [data.merchantId]);
 
   const handleInsert = useCallback(
     (record: RealtimePaymentRecord) => {
@@ -166,6 +205,14 @@ export function OverviewContent({ data }: { data: OverviewData }) {
 
   return (
     <div className="space-y-8">
+      {/* First Payment Celebration Modal */}
+      {firstPaymentNotif && (
+        <FirstPaymentModal
+          notificationId={firstPaymentNotif.id}
+          paymentLink={firstPaymentNotif.link ?? "/dashboard/payments"}
+        />
+      )}
+
       <div>
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-white">
@@ -259,6 +306,15 @@ export function OverviewContent({ data }: { data: OverviewData }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Milestone Badges */}
+      {milestones.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {milestones.slice(0, 3).map((m) => (
+            <MilestoneBadge key={m.milestone_key} milestoneKey={m.milestone_key} />
+          ))}
+        </div>
+      )}
 
       {/* Growth Narrative — Your Week */}
       {filtered.weeklyStats && (
