@@ -1,7 +1,7 @@
 "use client";
 
 import { useTestModeContext } from "@/contexts/TestModeContext";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,8 @@ import { DollarSign, TrendingUp, Clock, CreditCard, Loader2 } from "lucide-react
 import Link from "next/link";
 import { QuickStartChecklist } from "@/components/dashboard/quick-start-checklist";
 import { GrowthNarrative } from "@/components/dashboard/growth-narrative";
+import { useRealtimePayments, type ConnectionStatus, type RealtimePaymentRecord } from "@/hooks/useRealtimePayments";
+import { showPaymentToast } from "@/components/dashboard/payment-toast";
 
 interface OverviewData {
   totalBalance: number;
@@ -65,6 +67,26 @@ function UsdSecondary({ amountUsd, displayCurrency }: { amountUsd: number; displ
   );
 }
 
+function ConnectionIndicator({ status }: { status: ConnectionStatus }) {
+  if (status === "connected") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-green-400">
+        <span className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
+        Live
+      </span>
+    );
+  }
+  if (status === "reconnecting") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-yellow-400">
+        <span className="h-2 w-2 rounded-full bg-yellow-400 animate-pulse" />
+        Reconnecting
+      </span>
+    );
+  }
+  return null;
+}
+
 export function OverviewContent({ data }: { data: OverviewData }) {
   const { isTestMode } = useTestModeContext();
   const [filtered, setFiltered] = useState<OverviewData>(data);
@@ -82,15 +104,75 @@ export function OverviewContent({ data }: { data: OverviewData }) {
       .finally(() => setLoading(false));
   }, [isTestMode]);
 
+  const handleInsert = useCallback(
+    (record: RealtimePaymentRecord) => {
+      // Only process payments matching current test mode
+      if (Boolean(record.is_test) !== isTestMode) return;
+
+      showPaymentToast({
+        amount: Number(record.amount),
+        currency: record.currency ?? "USD",
+        token: record.crypto_token ?? undefined,
+      });
+
+      setFiltered((prev) => ({
+        ...prev,
+        totalPayments: prev.totalPayments + 1,
+        todayRevenue: prev.todayRevenue + Number(record.amount),
+        pendingCount:
+          record.status === "pending" || record.status === "processing"
+            ? prev.pendingCount + 1
+            : prev.pendingCount,
+        recentPayments: [
+          {
+            id: record.id,
+            external_order_id: record.external_order_id ?? null,
+            amount: Number(record.amount),
+            currency: record.currency ?? "USD",
+            status: record.status ?? "pending",
+            created_at: record.created_at ?? new Date().toISOString(),
+            is_test: Boolean(record.is_test),
+          },
+          ...prev.recentPayments.slice(0, 7),
+        ],
+      }));
+    },
+    [isTestMode]
+  );
+
+  const handleUpdate = useCallback(
+    (record: RealtimePaymentRecord) => {
+      if (Boolean(record.is_test) !== isTestMode) return;
+
+      setFiltered((prev) => ({
+        ...prev,
+        recentPayments: prev.recentPayments.map((p) =>
+          p.id === record.id
+            ? { ...p, status: record.status ?? p.status }
+            : p
+        ),
+      }));
+    },
+    [isTestMode]
+  );
+
+  const { connectionStatus } = useRealtimePayments(filtered.merchantId, {
+    onInsert: handleInsert,
+    onUpdate: handleUpdate,
+  });
+
   const dc = filtered.displayCurrency || "USD";
   const rate = filtered.exchangeRate || 1;
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-white">
-          Welcome back, {filtered.businessName}
-        </h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-white">
+            Welcome back, {filtered.businessName}
+          </h1>
+          <ConnectionIndicator status={connectionStatus} />
+        </div>
         <p className="text-zinc-400 mt-1">
           Accept crypto from any chain. Settle instantly to your wallet. No holds, no chargebacks, no middlemen.
         </p>
