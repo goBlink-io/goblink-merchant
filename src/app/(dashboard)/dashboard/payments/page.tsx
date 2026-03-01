@@ -82,6 +82,7 @@ export default async function PaymentsPage({
         exchangeRate={exchangeRate}
         currentStatus={params.status || "all"}
         currentSearch={params.search || ""}
+        merchantId={merchant.id}
       />
     </div>
   );
