@@ -33,7 +33,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Key, Plus, Trash2, Globe, Webhook, Building2, AlertCircle, Play, RotateCw, ChevronDown, ChevronRight, Loader2, Bell, Palette } from "lucide-react";
+import { Key, Plus, Trash2, Globe, Webhook, Building2, AlertCircle, Play, RotateCw, ChevronDown, ChevronRight, Loader2, Bell, Palette, Shield } from "lucide-react";
+import { MfaSetup } from "@/components/dashboard/mfa-setup";
 import { formatDate } from "@/lib/utils";
 import { SUPPORTED_CURRENCIES } from "@/lib/forex";
 
@@ -92,6 +93,7 @@ export function SettingsContent({ merchant, apiKeys, webhooks, notificationPrefe
         <TabsTrigger value="payments">Payment Preferences</TabsTrigger>
         <TabsTrigger value="api">API Keys</TabsTrigger>
         <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+        <TabsTrigger value="security">Security</TabsTrigger>
         <TabsTrigger value="notifications">Notifications</TabsTrigger>
       </TabsList>
 
@@ -113,6 +115,10 @@ export function SettingsContent({ merchant, apiKeys, webhooks, notificationPrefe
 
       <TabsContent value="webhooks">
         <WebhookSettings merchantId={merchant.id} webhooks={webhooks} />
+      </TabsContent>
+
+      <TabsContent value="security">
+        <MfaSetup />
       </TabsContent>
 
       <TabsContent value="notifications">
