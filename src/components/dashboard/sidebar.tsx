@@ -16,6 +16,7 @@ import {
   LogOut,
   Zap,
   ChevronLeft,
+  ChevronDown,
   Menu,
   LifeBuoy,
   FlaskConical,
@@ -28,70 +29,65 @@ import {
   Wallet,
 } from "lucide-react";
 import { useTestModeContext } from "@/contexts/TestModeContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
-const navItems = [
+interface NavItem {
+  title: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const STORAGE_KEY = "sidebar-groups";
+
+const navGroups: NavGroup[] = [
   {
-    title: "Overview",
-    href: "/dashboard",
-    icon: LayoutDashboard,
+    label: "Main",
+    items: [
+      { title: "Overview", href: "/dashboard", icon: LayoutDashboard },
+    ],
   },
   {
-    title: "Payments",
-    href: "/dashboard/payments",
-    icon: CreditCard,
+    label: "Payments",
+    items: [
+      { title: "Payments", href: "/dashboard/payments", icon: CreditCard },
+      { title: "Refunds", href: "/dashboard/refunds", icon: RotateCcw },
+      { title: "Payment Links", href: "/dashboard/links", icon: Link2 },
+      { title: "Invoices", href: "/dashboard/invoices", icon: FileText },
+    ],
   },
   {
-    title: "Refunds",
-    href: "/dashboard/refunds",
-    icon: RotateCcw,
+    label: "Tools",
+    items: [
+      { title: "POS", href: "/dashboard/pos", icon: Store },
+      { title: "Webhooks", href: "/dashboard/webhooks", icon: Plug },
+      { title: "Activity", href: "/dashboard/activity", icon: Activity },
+      { title: "Export", href: "/dashboard/export", icon: Download },
+    ],
   },
   {
-    title: "Payment Links",
-    href: "/dashboard/links",
-    icon: Link2,
-  },
-  {
-    title: "Invoices",
-    href: "/dashboard/invoices",
-    icon: FileText,
-  },
-  {
-    title: "POS",
-    href: "/dashboard/pos",
-    icon: Store,
-  },
-  {
-    title: "Support",
-    href: "/dashboard/support",
-    icon: LifeBuoy,
-  },
-  {
-    title: "Webhooks",
-    href: "/dashboard/webhooks",
-    icon: Plug,
-  },
-  {
-    title: "Activity",
-    href: "/dashboard/activity",
-    icon: Activity,
-  },
-  {
-    title: "Export",
-    href: "/dashboard/export",
-    icon: Download,
-  },
-  {
-    title: "Settlement",
-    href: "/dashboard/settings/settlement",
-    icon: Wallet,
-  },
-  {
-    title: "Settings",
-    href: "/dashboard/settings",
-    icon: Settings,
+    label: "Account",
+    items: [
+      { title: "Settlement", href: "/dashboard/settings/settlement", icon: Wallet },
+      { title: "Settings", href: "/dashboard/settings", icon: Settings },
+      { title: "Support", href: "/dashboard/support", icon: LifeBuoy },
+    ],
   },
 ];
+
+function loadCollapsedGroups(): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -100,7 +96,22 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unresolvedCount, setUnresolvedCount] = useState(0);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const { isTestMode, toggleTestMode } = useTestModeContext();
+
+  useEffect(() => {
+    setCollapsedGroups(loadCollapsedGroups());
+  }, []);
+
+  const toggleGroup = useCallback((label: string) => {
+    setCollapsedGroups((prev) => {
+      const next = { ...prev, [label]: !prev[label] };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     fetch("/api/v1/internal/tickets")
@@ -180,35 +191,62 @@ export function Sidebar() {
 
           {/* Nav */}
           <ScrollArea className="flex-1 py-4">
-            <nav className="space-y-1 px-2">
-              {navItems.map((item) => {
-                const isActive =
-                  pathname === item.href ||
-                  (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            <nav className="space-y-3 px-2">
+              {navGroups.map((group) => {
+                const isGroupCollapsed = !!collapsedGroups[group.label];
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setMobileOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-blue-600/10 text-blue-400"
-                        : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                    )}
-                  >
-                    <item.icon className="h-5 w-5 shrink-0" />
+                  <div key={group.label}>
+                    {/* Group header — hidden in icon-only mode */}
                     {!collapsed && (
-                      <span className="flex-1 flex items-center justify-between">
-                        {item.title}
-                        {item.title === "Support" && unresolvedCount > 0 && (
-                          <Badge className="bg-blue-600/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0 ml-auto">
-                            {unresolvedCount}
-                          </Badge>
-                        )}
-                      </span>
+                      <button
+                        onClick={() => toggleGroup(group.label)}
+                        className="flex w-full items-center justify-between px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wider text-zinc-500 hover:text-zinc-400 transition-colors"
+                      >
+                        {group.label}
+                        <ChevronDown
+                          className={cn(
+                            "h-3 w-3 transition-transform",
+                            isGroupCollapsed && "-rotate-90"
+                          )}
+                        />
+                      </button>
                     )}
-                  </Link>
+                    {/* Group items */}
+                    {(!isGroupCollapsed || collapsed) && (
+                      <div className="space-y-0.5">
+                        {group.items.map((item) => {
+                          const isActive =
+                            pathname === item.href ||
+                            (item.href !== "/dashboard" && pathname.startsWith(item.href));
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={() => setMobileOpen(false)}
+                              className={cn(
+                                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                                isActive
+                                  ? "bg-blue-600/10 text-blue-400"
+                                  : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                              )}
+                            >
+                              <item.icon className="h-5 w-5 shrink-0" />
+                              {!collapsed && (
+                                <span className="flex-1 flex items-center justify-between">
+                                  {item.title}
+                                  {item.title === "Support" && unresolvedCount > 0 && (
+                                    <Badge className="bg-blue-600/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0 ml-auto">
+                                      {unresolvedCount}
+                                    </Badge>
+                                  )}
+                                </span>
+                              )}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </nav>
