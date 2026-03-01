@@ -29,6 +29,7 @@ import {
   Wallet,
   Landmark,
   Users,
+  Code,
 } from "lucide-react";
 import { useTestModeContext } from "@/contexts/TestModeContext";
 import { useState, useEffect, useCallback } from "react";
@@ -67,6 +68,7 @@ const navGroups: NavGroup[] = [
     label: "Tools",
     items: [
       { title: "POS", href: "/dashboard/pos", icon: Store },
+      { title: "Buttons", href: "/dashboard/buttons", icon: Code },
       { title: "Webhooks", href: "/dashboard/webhooks", icon: Plug },
       { title: "Activity", href: "/dashboard/activity", icon: Activity },
       { title: "Export", href: "/dashboard/export", icon: Download },

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { haptic } from "@/lib/haptics";
 import { QRCodeCanvas } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -120,6 +121,7 @@ export function POSContent({ currency }: POSContentProps) {
   }
 
   function handleKeypadPress(digit: string) {
+    haptic("press");
     if (digit === "C") {
       setAmount("");
       return;

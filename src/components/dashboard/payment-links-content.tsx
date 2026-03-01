@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { haptic } from "@/lib/haptics";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -129,6 +130,7 @@ export function PaymentLinksContent({
 
   function handleCopy(url: string, id: string) {
     navigator.clipboard.writeText(url);
+    haptic("tap");
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   }

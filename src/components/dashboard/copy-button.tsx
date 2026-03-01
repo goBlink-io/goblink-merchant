@@ -2,12 +2,14 @@
 
 import { Copy, Check } from "lucide-react";
 import { useState } from "react";
+import { haptic } from "@/lib/haptics";
 
 export function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
 
   function handleCopy() {
     navigator.clipboard.writeText(value);
+    haptic("tap");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }

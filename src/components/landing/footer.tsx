@@ -83,7 +83,11 @@ export function Footer() {
           <p className="text-xs text-zinc-600">
             &copy; {new Date().getFullYear()} goBlink. All rights reserved.
           </p>
-          <p className="text-xs text-zinc-600">Built by goBlink</p>
+          {/* TODO: Deploy status.goblink.io via Upptime (GitHub-based) */}
+          <div className="flex items-center gap-4">
+            <a href="#" className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors">System Status</a>
+            <p className="text-xs text-zinc-600">Built by goBlink</p>
+          </div>
         </div>
       </div>
     </footer>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { haptic } from "@/lib/haptics";
 import { QRCodeCanvas } from "qrcode.react";
 import {
   Dialog,
@@ -47,6 +48,7 @@ export function SharePaymentDialog({
 
   const handleCopyLink = useCallback(async () => {
     await navigator.clipboard.writeText(payment.payment_url);
+    haptic("tap");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [payment.payment_url]);

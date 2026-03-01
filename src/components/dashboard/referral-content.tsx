@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Users, Copy, Check, Gift, UserPlus, Star } from "lucide-react";
+import { haptic } from "@/lib/haptics";
 
 interface Referral {
   id: string;
@@ -57,6 +58,7 @@ export function ReferralContent() {
     if (!data?.referralCode) return;
     const link = `${window.location.origin}/signup?ref=${data.referralCode}`;
     navigator.clipboard.writeText(link);
+    haptic("tap");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
