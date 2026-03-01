@@ -7,7 +7,7 @@ import { FeatureGrid } from "@/components/landing/feature-grid";
 import { ComparisonTable } from "@/components/landing/comparison-table";
 // import { Pricing } from "@/components/landing/pricing"; // Removed — subscription model TBD post-sprints
 import { TrustSignals } from "@/components/landing/trust-signals";
-import { SocialProof } from "@/components/landing/social-proof";
+// import { SocialProof } from "@/components/landing/social-proof"; // Hidden until real testimonials
 import { FinalCTA } from "@/components/landing/final-cta";
 import { Footer } from "@/components/landing/footer";
 
@@ -40,7 +40,6 @@ export default function LandingPage() {
       <FeatureGrid />
       <ComparisonTable />
       <TrustSignals />
-      <SocialProof />
       <FinalCTA />
       <Footer />
     </main>
