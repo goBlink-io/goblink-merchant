@@ -69,6 +69,7 @@ interface MerchantData {
   walletAddress: string;
   settlementToken: string | null;
   settlementChain: string | null;
+  showPoweredBadge?: boolean;
 }
 
 interface Token {
@@ -1140,16 +1141,28 @@ function Card({
         {children}
       </div>
 
-      {/* Powered by goBlink footer */}
-      <div className="flex items-center justify-center gap-1.5 mt-4 text-xs text-zinc-600">
-        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
-        </svg>
-        Powered by{" "}
-        <span className="font-semibold bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
-          goBlink
-        </span>
-      </div>
+      {/* Powered by goBlink footer (conditional) */}
+      {(merchant?.showPoweredBadge !== false) && (
+        <div className="mt-4 space-y-1">
+          <a
+            href="https://merchant.goblink.io"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-400 transition-colors"
+          >
+            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
+            </svg>
+            Powered by{" "}
+            <span className="font-semibold bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
+              goBlink
+            </span>
+          </a>
+          <p className="text-xs text-zinc-500 text-center">
+            Non-custodial &middot; Instant settlement &middot; 26+ chains
+          </p>
+        </div>
+      )}
     </div>
   );
 }
