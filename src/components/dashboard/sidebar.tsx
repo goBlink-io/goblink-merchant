@@ -28,6 +28,7 @@ import {
   RotateCcw,
   Wallet,
   Landmark,
+  Users,
 } from "lucide-react";
 import { useTestModeContext } from "@/contexts/TestModeContext";
 import { useState, useEffect, useCallback } from "react";
@@ -78,6 +79,7 @@ const navGroups: NavGroup[] = [
       { title: "Settlement", href: "/dashboard/settings/settlement", icon: Wallet },
       { title: "Settings", href: "/dashboard/settings", icon: Settings },
       { title: "Support", href: "/dashboard/support", icon: LifeBuoy },
+      { title: "Referrals", href: "/dashboard/referrals", icon: Users },
     ],
   },
 ];

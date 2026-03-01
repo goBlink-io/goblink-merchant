@@ -139,6 +139,36 @@ export async function GET(request: NextRequest) {
             "Your first crypto payment is confirmed. Welcome to the future of payments.",
             `/dashboard/payments/${payment.id}`
           );
+
+          // --- Referral activation: notify referrer when referred merchant makes first payment ---
+          try {
+            const { data: referral } = await supabase
+              .from("merchant_referrals")
+              .select("id, referrer_id")
+              .eq("referred_id", payment.merchant_id)
+              .eq("status", "pending")
+              .single();
+
+            if (referral) {
+              await supabase
+                .from("merchant_referrals")
+                .update({ status: "active", activated_at: new Date().toISOString() })
+                .eq("id", referral.id);
+
+              insertNotification(
+                referral.referrer_id,
+                "referral",
+                "Referral activated!",
+                "A merchant you referred just made their first payment. You earned a fee waiver!",
+                "/dashboard/referrals"
+              );
+            }
+          } catch (refErr) {
+            console.error(
+              `[settle-payments] Referral check failed for ${payment.merchant_id}:`,
+              refErr instanceof Error ? refErr.message : refErr
+            );
+          }
         }
 
         // --- Milestone check ---

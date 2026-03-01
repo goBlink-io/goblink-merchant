@@ -7,7 +7,8 @@ export type NotificationType =
   | "webhook_failed"
   | "system"
   | "first_payment"
-  | "milestone";
+  | "milestone"
+  | "referral";
 
 /**
  * Insert an in-app notification for a merchant.
