@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, TrendingUp, Clock, CreditCard, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { QuickStartChecklist } from "@/components/dashboard/quick-start-checklist";
 
 interface OverviewData {
   totalBalance: number;
@@ -28,6 +29,16 @@ interface OverviewData {
   settlementToken: string;
   settlementChain: string;
   businessName: string;
+  onboardingChecklist?: {
+    account_created: boolean;
+    wallet_connected: boolean;
+    settlement_configured: boolean;
+    first_link_created: boolean;
+    test_payment_completed: boolean;
+    webhook_configured: boolean;
+  } | null;
+  firstPaymentCelebrated?: boolean;
+  merchantId?: string;
 }
 
 function formatConverted(amountUsd: number, displayCurrency: string, exchangeRate: number): string {
@@ -76,6 +87,15 @@ export function OverviewContent({ data }: { data: OverviewData }) {
           Accept crypto from any chain. Settle instantly to your wallet. No holds, no chargebacks, no middlemen.
         </p>
       </div>
+
+      {/* Quick Start Checklist */}
+      {filtered.onboardingChecklist && filtered.merchantId && (
+        <QuickStartChecklist
+          merchantId={filtered.merchantId}
+          checklist={filtered.onboardingChecklist}
+          firstPaymentCelebrated={filtered.firstPaymentCelebrated ?? false}
+        />
+      )}
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

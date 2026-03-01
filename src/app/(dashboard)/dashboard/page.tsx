@@ -84,6 +84,9 @@ export default async function DashboardPage() {
         settlementToken: merchant.settlement_token,
         settlementChain: merchant.settlement_chain,
         businessName: merchant.business_name,
+        onboardingChecklist: merchant.onboarding_checklist ?? null,
+        firstPaymentCelebrated: merchant.first_payment_celebrated ?? false,
+        merchantId: merchant.id,
       }}
     />
   );
