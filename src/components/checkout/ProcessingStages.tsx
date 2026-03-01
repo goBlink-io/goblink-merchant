@@ -12,6 +12,8 @@ interface ProcessingStagesProps {
   onComplete: (status: "confirmed" | "failed") => void;
   /** Called with payment data on each poll */
   onStatusUpdate: (data: StatusData) => void;
+  /** Estimated time in seconds from the quote response */
+  estimatedTimeSecs?: number;
 }
 
 export interface StatusData {
@@ -22,6 +24,7 @@ export interface StatusData {
   expiresAt?: string;
   customerChain?: string;
   oneClickStatus?: string;
+  failureReason?: string;
 }
 
 interface Stage {
@@ -74,6 +77,7 @@ export default function ProcessingStages({
   initialStatus,
   onComplete,
   onStatusUpdate,
+  estimatedTimeSecs,
 }: ProcessingStagesProps) {
   const [currentStage, setCurrentStage] = useState(() =>
     getStageFromStatus(initialStatus)
@@ -122,11 +126,25 @@ export default function ProcessingStages({
   }, [poll]);
 
   const progress = getProgressPercent(currentStage);
-  const estimatedTimeText = elapsedSecs < 10
-    ? "Usually takes 30-60 seconds"
-    : elapsedSecs < 60
-      ? `${elapsedSecs}s elapsed — almost there`
-      : `${Math.floor(elapsedSecs / 60)}m ${elapsedSecs % 60}s elapsed`;
+  const estSecs = estimatedTimeSecs ?? 45;
+  const isOverEstimate = elapsedSecs > estSecs * 2;
+
+  const estimatedTimeText = currentStage >= 5
+    ? "Done!"
+    : isOverEstimate
+      ? "Taking longer than usual. Your funds are safe."
+      : elapsedSecs < 10
+        ? `Estimated time: ~${estSecs} seconds`
+        : elapsedSecs < 60
+          ? `${elapsedSecs}s elapsed — almost there`
+          : `${Math.floor(elapsedSecs / 60)}m ${elapsedSecs % 60}s elapsed`;
+
+  // Smooth progress based on estimated time (fills 0→90% over the estimate)
+  const timeProgress = currentStage >= 5
+    ? 100
+    : Math.min(90, (elapsedSecs / estSecs) * 90);
+  // Use the higher of stage-based or time-based progress
+  const displayProgress = Math.max(progress, timeProgress);
 
   return (
     <div className="flex flex-col items-center text-center py-6">
@@ -150,21 +168,24 @@ export default function ProcessingStages({
       </h2>
 
       {/* Estimated time */}
-      <div className="flex items-center gap-1.5 text-xs text-zinc-500 mb-5">
+      <div className={cn(
+        "flex items-center gap-1.5 text-xs mb-5",
+        isOverEstimate ? "text-amber-400" : "text-zinc-500"
+      )}>
         <Clock className="h-3 w-3" />
         {estimatedTimeText}
       </div>
 
-      {/* Progress bar */}
-      <div className="w-full h-1.5 rounded-full bg-zinc-800 mb-6 overflow-hidden">
+      {/* Progress bar — smooth fill over estimated duration */}
+      <div className="w-full h-1.5 rounded-full bg-zinc-700 mb-6 overflow-hidden">
         <div
           className={cn(
-            "h-full rounded-full transition-all duration-1000 ease-out",
+            "h-full rounded-full transition-all duration-1000 ease-linear",
             currentStage >= 5
               ? "bg-emerald-500"
-              : "bg-gradient-to-r from-blue-500 to-violet-500"
+              : "bg-blue-600"
           )}
-          style={{ width: `${progress}%` }}
+          style={{ width: `${displayProgress}%` }}
         />
       </div>
 

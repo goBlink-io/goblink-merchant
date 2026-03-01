@@ -46,21 +46,23 @@ export async function GET(
   if (payment.status === "processing" && payment.deposit_address) {
     try {
       const execution = await getExecutionStatus(payment.deposit_address);
-      const oneClickStatus =
+      const execObj =
         typeof execution === "object" && execution !== null
-          ? (execution as Record<string, unknown>).status
+          ? (execution as Record<string, unknown>)
           : undefined;
+      const oneClickStatus = execObj?.status as string | undefined;
+      const failureReason = execObj?.reason ?? execObj?.error ?? execObj?.errorMessage;
 
       const response = apiSuccess({
         status: payment.status,
         sendTxHash: payment.send_tx_hash,
         fulfillmentTxHash:
-          (execution as Record<string, unknown>)?.fulfillmentTxHash ??
-          payment.fulfillment_tx_hash,
+          execObj?.fulfillmentTxHash ?? payment.fulfillment_tx_hash,
         confirmedAt: payment.confirmed_at,
         expiresAt: payment.expires_at,
         customerChain: payment.customer_chain,
         oneClickStatus,
+        ...(failureReason ? { failureReason: String(failureReason) } : {}),
       });
       return withCors(request, withRateLimitHeaders(response, "checkout-status", rl.remaining));
     } catch {

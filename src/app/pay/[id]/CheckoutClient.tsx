@@ -144,6 +144,9 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   const [txError, setTxError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Failure tracking
+  const [failureReason, setFailureReason] = useState<string | null>(null);
+
   // Manual fallback mode
   const [showManualFlow, setShowManualFlow] = useState(false);
 
@@ -537,6 +540,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
       confirmedAt: data.confirmedAt ?? prev.confirmedAt,
       customerChain: data.customerChain ?? prev.customerChain,
     }));
+    if (data.failureReason) setFailureReason(data.failureReason);
   }, []);
 
   // --- Render ---
@@ -626,36 +630,99 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
     );
   }
 
-  // Failed / Refunded
+  // Failed / Refunded — improved UX with parsed failure reasons
   if (step === "failed") {
     const isRefunded = payment.status === "refunded";
+
+    // Map failure reason to human-readable message
+    const getFailureMessage = (reason: string | null): { message: string; refundEstimate: string } => {
+      if (isRefunded) {
+        return {
+          message: "Don't worry — your funds have been returned to your wallet automatically.",
+          refundEstimate: "The refund should appear in your wallet shortly.",
+        };
+      }
+      const lower = (reason || "").toLowerCase();
+      if (lower.includes("insufficient") && lower.includes("liquidity")) {
+        return {
+          message: "There wasn't enough liquidity on this route right now. Try a different token or try again in a few minutes.",
+          refundEstimate: "Any sent funds will be refunded within ~5 minutes.",
+        };
+      }
+      if (lower.includes("timeout") || lower.includes("expir")) {
+        return {
+          message: "The payment window expired before funds were detected. Your funds are safe and will be refunded automatically.",
+          refundEstimate: "Estimated refund: ~5 minutes.",
+        };
+      }
+      if (lower.includes("slippage")) {
+        return {
+          message: "Price moved too much during the swap. Your funds are being refunded to your wallet.",
+          refundEstimate: "Estimated refund: ~2–5 minutes.",
+        };
+      }
+      return {
+        message: "Something unexpected happened, but your funds are safe. If you sent funds, they'll be refunded to your wallet.",
+        refundEstimate: "Estimated refund: ~5 minutes.",
+      };
+    };
+
+    const { message: failMsg, refundEstimate } = getFailureMessage(failureReason);
+
+    const handleRetry = async () => {
+      try {
+        const res = await fetch(`/api/checkout/${paymentId}/retry`, { method: "POST" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.paymentUrl) {
+          window.location.href = data.paymentUrl;
+        }
+      } catch {
+        // Silently fail — user can try manually
+      }
+    };
+
     return (
       <Card merchant={merchant} isTest={isTest}>
         <div className="flex flex-col items-center text-center py-8">
-          <div className="h-16 w-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
-            <AlertCircle className="h-8 w-8 text-red-400" />
+          <div className="h-16 w-16 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
+            <AlertCircle className="h-8 w-8 text-amber-400" />
           </div>
           <h2 className="text-xl font-semibold text-zinc-100 mb-2">
-            {isRefunded ? "Payment Refunded" : "Payment Failed"}
+            {isRefunded ? "Payment Refunded" : "Payment Didn\u2019t Go Through"}
           </h2>
-          <p className="text-sm text-zinc-400 mb-2">
-            {isRefunded
-              ? "Don't worry — your funds have been returned to your wallet automatically."
-              : "Something went wrong, but your funds are safe."}
+          <p className="text-sm text-zinc-300 mb-2 max-w-xs">
+            {failMsg}
           </p>
           <p className="text-xs text-zinc-500 mb-6">
-            {isRefunded
-              ? "The refund should appear in your wallet shortly."
-              : "If you sent funds, they will be auto-refunded to your wallet. No action needed."}
+            {refundEstimate}
           </p>
-          {payment.returnUrl && (
-            <a
-              href={payment.returnUrl}
-              className="text-sm text-blue-400 hover:text-blue-300 underline"
-            >
-              Return to merchant
-            </a>
-          )}
+
+          <div className="flex flex-col gap-3 w-full max-w-xs">
+            {!isRefunded && (
+              <button
+                onClick={handleRetry}
+                className="w-full px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-medium hover:brightness-110 transition-all"
+              >
+                Try Again
+              </button>
+            )}
+            {payment.returnUrl && (
+              <a
+                href={payment.returnUrl}
+                className="w-full px-6 py-2.5 rounded-xl border border-zinc-700 text-zinc-300 text-sm font-medium hover:bg-zinc-800 transition-colors text-center"
+              >
+                Return to merchant
+              </a>
+            )}
+          </div>
+
+          <a
+            href="mailto:support@goblink.io"
+            className="mt-4 text-xs text-zinc-500 hover:text-zinc-400 transition-colors"
+          >
+            Need help? Contact support
+          </a>
         </div>
       </Card>
     );
@@ -671,6 +738,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
           paymentId={paymentId}
           onComplete={handleProcessingComplete}
           onStatusUpdate={handleStatusUpdate}
+          estimatedTimeSecs={quote?.estimated_time}
         />
       </Card>
     );
