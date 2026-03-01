@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { DollarSign, TrendingUp, Clock, CreditCard, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { QuickStartChecklist } from "@/components/dashboard/quick-start-checklist";
+import { GrowthNarrative } from "@/components/dashboard/growth-narrative";
 
 interface OverviewData {
   totalBalance: number;
@@ -39,6 +40,13 @@ interface OverviewData {
   } | null;
   firstPaymentCelebrated?: boolean;
   merchantId?: string;
+  weeklyStats?: {
+    thisWeekRevenue: number;
+    lastWeekRevenue: number;
+    thisWeekCount: number;
+    lastWeekCount: number;
+    monthPaymentCount: number;
+  };
 }
 
 function formatConverted(amountUsd: number, displayCurrency: string, exchangeRate: number): string {
@@ -169,6 +177,15 @@ export function OverviewContent({ data }: { data: OverviewData }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Growth Narrative — Your Week */}
+      {filtered.weeklyStats && (
+        <GrowthNarrative
+          stats={filtered.weeklyStats}
+          displayCurrency={dc}
+          exchangeRate={rate}
+        />
+      )}
 
       {/* Recent Payments */}
       <Card>

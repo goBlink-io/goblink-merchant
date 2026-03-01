@@ -67,6 +67,42 @@ export async function GET(request: NextRequest) {
     .eq("status", "confirmed")
     .eq("is_test", isTest);
 
+  // Weekly comparison data for growth narrative
+  const now = new Date();
+  const thisWeekStart = new Date(now);
+  thisWeekStart.setDate(now.getDate() - now.getDay()); // Start of this week (Sunday)
+  thisWeekStart.setHours(0, 0, 0, 0);
+
+  const lastWeekStart = new Date(thisWeekStart);
+  lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const { data: thisWeekPayments } = await supabase
+    .from("payments")
+    .select("net_amount")
+    .eq("merchant_id", merchant.id)
+    .eq("status", "confirmed")
+    .eq("is_test", isTest)
+    .gte("confirmed_at", thisWeekStart.toISOString());
+
+  const { data: lastWeekPayments } = await supabase
+    .from("payments")
+    .select("net_amount")
+    .eq("merchant_id", merchant.id)
+    .eq("status", "confirmed")
+    .eq("is_test", isTest)
+    .gte("confirmed_at", lastWeekStart.toISOString())
+    .lt("confirmed_at", thisWeekStart.toISOString());
+
+  const { count: thisMonthCount } = await supabase
+    .from("payments")
+    .select("*", { count: "exact", head: true })
+    .eq("merchant_id", merchant.id)
+    .eq("status", "confirmed")
+    .eq("is_test", isTest)
+    .gte("confirmed_at", thisMonthStart.toISOString());
+
   const todayRevenue =
     todayPayments?.reduce((sum, p) => sum + (Number(p.net_amount) || 0), 0) ??
     0;
@@ -79,6 +115,13 @@ export async function GET(request: NextRequest) {
   // Get exchange rate for display currency
   const displayCurrency = merchant.display_currency || "USD";
   const exchangeRate = await getExchangeRate(displayCurrency);
+
+  const thisWeekRevenue =
+    thisWeekPayments?.reduce((sum, p) => sum + (Number(p.net_amount) || 0), 0) ?? 0;
+  const lastWeekRevenue =
+    lastWeekPayments?.reduce((sum, p) => sum + (Number(p.net_amount) || 0), 0) ?? 0;
+  const thisWeekCount = thisWeekPayments?.length ?? 0;
+  const lastWeekCount = lastWeekPayments?.length ?? 0;
 
   return NextResponse.json({
     totalBalance,
@@ -95,5 +138,12 @@ export async function GET(request: NextRequest) {
     onboardingChecklist: merchant.onboarding_checklist ?? null,
     firstPaymentCelebrated: merchant.first_payment_celebrated ?? false,
     merchantId: merchant.id,
+    weeklyStats: {
+      thisWeekRevenue,
+      lastWeekRevenue,
+      thisWeekCount,
+      lastWeekCount,
+      monthPaymentCount: thisMonthCount ?? 0,
+    },
   });
 }

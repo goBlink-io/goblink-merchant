@@ -54,12 +54,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect authenticated users from root to dashboard
-  if (request.nextUrl.pathname === "/" && user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
-  }
+  // Landing page (/) is always public — no redirect for authenticated users
 
   return supabaseResponse;
 }
