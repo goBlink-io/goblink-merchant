@@ -9,7 +9,7 @@ const features = [
   },
   {
     icon: Globe,
-    title: "Cross-Chain (26+ Chains)",
+    title: "Cross-Chain (12 Chains)",
     description:
       "Accept payments on Ethereum, Solana, Base, Polygon, Arbitrum, and 20+ more chains.",
   },

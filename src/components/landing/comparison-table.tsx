@@ -16,7 +16,7 @@ const rows: Row[] = [
     custodial: false,
     fees: "0.05 – 0.35%",
     settlement: "Instant",
-    chains: "26+",
+    chains: "12",
     chargebacks: false,
     highlight: true,
   },

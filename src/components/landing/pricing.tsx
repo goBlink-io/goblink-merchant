@@ -10,7 +10,7 @@ const tiers = [
     features: [
       "No monthly fee",
       "No setup fee",
-      "26+ chains supported",
+      "12 chains supported",
       "API + webhooks",
       "Email support",
     ],

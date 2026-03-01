@@ -13,7 +13,7 @@ const newWay = [
   "Fees as low as 0.05%",
   "Non-custodial — can't freeze what we don't hold",
   "No chargebacks — crypto is final",
-  "Accept any token on 26+ chains",
+  "Accept any token on 12 chains",
 ];
 
 export function ProblemSolution() {
