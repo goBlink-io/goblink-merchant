@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
   const { data: merchant } = await supabase
     .from("merchants")
-    .select("id, business_name, currency, display_currency, settlement_token, settlement_chain")
+    .select("id, business_name, currency, display_currency, settlement_token, settlement_chain, onboarding_checklist, first_payment_celebrated")
     .eq("user_id", user.id)
     .single();
 
@@ -92,5 +92,8 @@ export async function GET(request: NextRequest) {
     settlementToken: merchant.settlement_token,
     settlementChain: merchant.settlement_chain,
     businessName: merchant.business_name,
+    onboardingChecklist: merchant.onboarding_checklist ?? null,
+    firstPaymentCelebrated: merchant.first_payment_celebrated ?? false,
+    merchantId: merchant.id,
   });
 }
