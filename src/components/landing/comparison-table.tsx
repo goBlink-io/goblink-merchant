@@ -2,7 +2,7 @@ import { Check, X, Minus } from "lucide-react";
 
 interface Row {
   provider: string;
-  custodial: boolean | null;
+  directToWallet: boolean | null;
   fees: string;
   settlement: string;
   chains: string;
@@ -13,7 +13,7 @@ interface Row {
 const rows: Row[] = [
   {
     provider: "goBlink",
-    custodial: false,
+    directToWallet: true,
     fees: "0.05 – 0.35%",
     settlement: "Instant",
     chains: "12",
@@ -22,7 +22,7 @@ const rows: Row[] = [
   },
   {
     provider: "Stripe",
-    custodial: true,
+    directToWallet: false,
     fees: "2.9% + $0.30",
     settlement: "2–7 days",
     chains: "—",
@@ -30,7 +30,7 @@ const rows: Row[] = [
   },
   {
     provider: "BitPay",
-    custodial: true,
+    directToWallet: false,
     fees: "1%",
     settlement: "1–2 days",
     chains: "16",
@@ -38,7 +38,7 @@ const rows: Row[] = [
   },
   {
     provider: "Coinbase Commerce",
-    custodial: true,
+    directToWallet: false,
     fees: "1%",
     settlement: "1–2 days",
     chains: "8",
@@ -46,7 +46,7 @@ const rows: Row[] = [
   },
   {
     provider: "NOWPayments",
-    custodial: true,
+    directToWallet: false,
     fees: "0.5 – 1%",
     settlement: "Minutes",
     chains: "200+",
@@ -82,11 +82,11 @@ export function ComparisonTable() {
             <thead>
               <tr className="border-b border-zinc-800 bg-zinc-900/50">
                 <th className="text-left py-4 px-6 text-zinc-400 font-medium">Provider</th>
-                <th className="text-center py-4 px-4 text-zinc-400 font-medium">Custodial?</th>
+                <th className="text-center py-4 px-4 text-zinc-400 font-medium">Direct to Wallet</th>
                 <th className="text-center py-4 px-4 text-zinc-400 font-medium">Fees</th>
                 <th className="text-center py-4 px-4 text-zinc-400 font-medium">Settlement</th>
                 <th className="text-center py-4 px-4 text-zinc-400 font-medium">Chains</th>
-                <th className="text-center py-4 px-4 text-zinc-400 font-medium">Chargebacks</th>
+                <th className="text-center py-4 px-4 text-zinc-400 font-medium">No Chargebacks</th>
               </tr>
             </thead>
             <tbody>
@@ -115,7 +115,7 @@ export function ComparisonTable() {
                   </td>
                   <td className="py-4 px-4 text-center">
                     <span className="inline-flex justify-center">
-                      <BoolCell value={row.custodial} inverted />
+                      <BoolCell value={row.directToWallet} />
                     </span>
                   </td>
                   <td className="py-4 px-4 text-center">
