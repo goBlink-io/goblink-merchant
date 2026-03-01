@@ -21,7 +21,7 @@ export default async function SettingsPage() {
   // Fetch API keys
   const { data: apiKeys } = await supabase
     .from("api_keys")
-    .select("id, key_prefix, label, is_test, last_used_at, created_at")
+    .select("id, key_prefix, label, is_test, last_used_at, created_at, allowed_ips")
     .eq("merchant_id", merchant.id)
     .order("created_at", { ascending: false });
 

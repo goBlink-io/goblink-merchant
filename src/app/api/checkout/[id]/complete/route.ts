@@ -40,12 +40,13 @@ export async function POST(
     return withCors(request, apiError("Invalid JSON body", 400));
   }
 
-  const { sendTxHash, depositAddress, payerAddress, payerChain, customerEmail } = body as {
+  const { sendTxHash, depositAddress, payerAddress, payerChain, customerEmail, customFields } = body as {
     sendTxHash: string;
     depositAddress: string;
     payerAddress: string;
     payerChain: string;
     customerEmail?: string;
+    customFields?: Record<string, string>;
   };
 
   if (!sendTxHash || !payerAddress || !payerChain) {
@@ -62,7 +63,7 @@ export async function POST(
   // Verify payment exists and is pending
   const { data: payment, error: fetchError } = await supabase
     .from("payments")
-    .select("id, status, deposit_address, merchant_id, amount, currency")
+    .select("id, status, deposit_address, merchant_id, amount, currency, metadata")
     .eq("id", id)
     .single();
 
@@ -92,6 +93,12 @@ export async function POST(
     updatePayload.customer_email = customerEmail;
   }
 
+  // HXF 3.4: Store custom field values in payment metadata
+  if (customFields && typeof customFields === "object" && Object.keys(customFields).length > 0) {
+    const existingMetadata = (payment.metadata as Record<string, unknown>) ?? {};
+    updatePayload.metadata = { ...existingMetadata, custom_fields: customFields };
+  }
+
   const { data: updated, error } = await supabase
     .from("payments")
     .update(updatePayload)
@@ -117,6 +124,7 @@ export async function POST(
       sendTxHash,
       payerAddress,
       payerChain,
+      ...(customFields && Object.keys(customFields).length > 0 ? { custom_fields: customFields } : {}),
     },
   });
 
