@@ -555,7 +555,7 @@ export function OnboardingWizard({
             <div className="mt-8 text-center">
               <Button
                 size="lg"
-                onClick={() => router.push("/dashboard")}
+                onClick={() => router.push("/dashboard?onboarded=true")}
               >
                 Go to Dashboard
                 <ArrowRight className="h-4 w-4" />

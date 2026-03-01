@@ -13,6 +13,7 @@ import { useRealtimePayments, type ConnectionStatus, type RealtimePaymentRecord 
 import { showPaymentToast } from "@/components/dashboard/payment-toast";
 import { FirstPaymentModal } from "@/components/dashboard/first-payment-modal";
 import { MilestoneBadge } from "@/components/dashboard/milestone-badge";
+import { WelcomeModal } from "@/components/dashboard/welcome-modal";
 
 interface OverviewData {
   totalBalance: number;
@@ -205,6 +206,9 @@ export function OverviewContent({ data }: { data: OverviewData }) {
 
   return (
     <div className="space-y-8">
+      {/* Welcome Modal — shown after onboarding completes */}
+      <WelcomeModal />
+
       {/* First Payment Celebration Modal */}
       {firstPaymentNotif && (
         <FirstPaymentModal

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import confetti from "canvas-confetti";
+import { haptic } from "@/lib/haptics";
 import dynamic from "next/dynamic";
 import {
   ChevronDown,
@@ -535,6 +536,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   // --- Copy helper ---
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+    haptic("tap");
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -602,6 +604,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   useEffect(() => {
     if (step === "success" && !confettiFired.current) {
       confettiFired.current = true;
+      haptic("success");
       const duration = 2000;
       const end = Date.now() + duration;
       const frame = () => {
