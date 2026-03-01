@@ -28,6 +28,29 @@ export async function GET(request: Request) {
           sendWelcomeEmail(merchant.id).catch((err) =>
             console.error("[email] Welcome email failed:", err)
           );
+
+          // Link referral if referral_code was passed during signup
+          const refCode = data.user.user_metadata?.referral_code;
+          if (refCode) {
+            const { data: referrer } = await serviceClient
+              .from("merchants")
+              .select("id")
+              .eq("referral_code", refCode)
+              .single();
+
+            if (referrer && referrer.id !== merchant.id) {
+              await serviceClient
+                .from("merchant_referrals")
+                .insert({
+                  referrer_id: referrer.id,
+                  referred_id: merchant.id,
+                  status: "pending",
+                })
+                .then(({ error: refErr }) => {
+                  if (refErr) console.error("[referral] Failed to create referral link:", refErr.message);
+                });
+            }
+          }
         }
       }
 
