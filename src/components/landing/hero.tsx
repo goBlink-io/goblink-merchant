@@ -19,7 +19,7 @@ export function Hero() {
 
         <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold tracking-tight">
           <span className="block text-white">Every payment.</span>
-          <span className="block bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
+          <span className="block bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent pb-2 leading-tight">
             Straight to your wallet.
           </span>
         </h1>
