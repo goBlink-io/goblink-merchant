@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCircle2, CreditCard, AlertTriangle, MessageSquare, Webhook, Info } from "lucide-react";
+import { Bell, CheckCircle2, CreditCard, AlertTriangle, MessageSquare, Webhook, Info, PartyPopper, Trophy } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
@@ -23,6 +23,8 @@ const TYPE_ICONS: Record<string, typeof Bell> = {
   ticket_reply: MessageSquare,
   webhook_failed: Webhook,
   system: Info,
+  first_payment: PartyPopper,
+  milestone: Trophy,
 };
 
 function relativeTime(dateStr: string): string {

@@ -7,6 +7,7 @@ import { TestModeProvider } from "@/contexts/TestModeContext";
 import { TestModeBar } from "@/components/dashboard/test-mode-bar";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { Toaster } from "sonner";
+import { IdleTimeoutWrapper } from "@/components/dashboard/idle-timeout-wrapper";
 
 export default async function DashboardLayout({
   children,
@@ -49,6 +50,7 @@ export default async function DashboardLayout({
           <ChatWrapper />
         </Suspense>
       </div>
+      <IdleTimeoutWrapper />
       <Toaster theme="dark" richColors position="top-right" />
     </TestModeProvider>
   );
