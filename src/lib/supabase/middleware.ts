@@ -54,10 +54,10 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Redirect root to dashboard or login
-  if (request.nextUrl.pathname === "/") {
+  // Redirect authenticated users from root to dashboard
+  if (request.nextUrl.pathname === "/" && user) {
     const url = request.nextUrl.clone();
-    url.pathname = user ? "/dashboard" : "/login";
+    url.pathname = "/dashboard";
     return NextResponse.redirect(url);
   }
 
