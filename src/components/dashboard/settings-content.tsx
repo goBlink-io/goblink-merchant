@@ -50,6 +50,7 @@ interface Merchant {
   settlement_chain: string;
   brand_color: string;
   logo_url: string | null;
+  show_powered_badge: boolean;
 }
 
 interface ApiKey {
@@ -249,6 +250,7 @@ function ProfileSettings({ merchant }: { merchant: Merchant }) {
 function BrandingSettings({ merchant }: { merchant: Merchant }) {
   const [logoUrl, setLogoUrl] = useState(merchant.logo_url || "");
   const [brandColor, setBrandColor] = useState(merchant.brand_color || "#2563EB");
+  const [showPoweredBadge, setShowPoweredBadge] = useState(merchant.show_powered_badge ?? true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const router = useRouter();
@@ -261,6 +263,7 @@ function BrandingSettings({ merchant }: { merchant: Merchant }) {
       .update({
         logo_url: logoUrl || null,
         brand_color: brandColor,
+        show_powered_badge: showPoweredBadge,
       })
       .eq("id", merchant.id);
 
@@ -322,6 +325,16 @@ function BrandingSettings({ merchant }: { merchant: Merchant }) {
               <p className="text-xs text-zinc-500">
                 Used as accent color on your checkout page.
               </p>
+            </div>
+
+            <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-zinc-800/30 border border-zinc-800">
+              <div>
+                <p className="text-sm font-medium text-white">Show Powered by goBlink on checkout</p>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Display a small goBlink badge on your checkout page. Enabling this reduces your processing fee by 0.05%.
+                </p>
+              </div>
+              <Switch checked={showPoweredBadge} onCheckedChange={setShowPoweredBadge} />
             </div>
 
             <div className="flex items-center gap-3 pt-2">
