@@ -27,6 +27,7 @@ import {
   Download,
   RotateCcw,
   Wallet,
+  Landmark,
 } from "lucide-react";
 import { useTestModeContext } from "@/contexts/TestModeContext";
 import { useState, useEffect, useCallback } from "react";
@@ -35,6 +36,7 @@ interface NavItem {
   title: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
+  comingSoon?: boolean;
 }
 
 interface NavGroup {
@@ -72,6 +74,7 @@ const navGroups: NavGroup[] = [
   {
     label: "Account",
     items: [
+      { title: "Cash Out", href: "/dashboard/offramp", icon: Landmark, comingSoon: true },
       { title: "Settlement", href: "/dashboard/settings/settlement", icon: Wallet },
       { title: "Settings", href: "/dashboard/settings", icon: Settings },
       { title: "Support", href: "/dashboard/support", icon: LifeBuoy },
@@ -234,6 +237,11 @@ export function Sidebar() {
                               {!collapsed && (
                                 <span className="flex-1 flex items-center justify-between">
                                   {item.title}
+                                  {item.comingSoon && (
+                                    <Badge className="bg-zinc-700/50 text-zinc-500 border-zinc-600/30 text-[10px] px-1.5 py-0 ml-auto">
+                                      Soon
+                                    </Badge>
+                                  )}
                                   {item.title === "Support" && unresolvedCount > 0 && (
                                     <Badge className="bg-blue-600/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0 ml-auto">
                                       {unresolvedCount}

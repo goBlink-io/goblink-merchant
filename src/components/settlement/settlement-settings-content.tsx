@@ -21,7 +21,10 @@ import {
   ArrowLeft,
   Pencil,
   Save,
+  Landmark,
+  Lock,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { ExchangeOfframpGuide } from "./exchange-offramp-guide";
 
 // ---------------------------------------------------------------------------
@@ -69,6 +72,20 @@ function isValidAddress(addr: string, chain: string): boolean {
 // Component
 // ---------------------------------------------------------------------------
 
+const OFFRAMP_PROVIDERS = [
+  { value: "coinbase", label: "Coinbase" },
+  { value: "shakepay", label: "Shakepay" },
+  { value: "onramper", label: "Onramper" },
+];
+
+const OFFRAMP_CURRENCIES = [
+  { value: "USD", label: "USD — US Dollar" },
+  { value: "CAD", label: "CAD — Canadian Dollar" },
+  { value: "EUR", label: "EUR — Euro" },
+  { value: "GBP", label: "GBP — British Pound" },
+  { value: "AUD", label: "AUD — Australian Dollar" },
+];
+
 interface MerchantData {
   id: string;
   wallet_address?: string;
@@ -76,6 +93,10 @@ interface MerchantData {
   settlement_token?: string;
   onboarding_tier?: string;
   thirdweb_auth_method?: string;
+  offramp_provider?: string;
+  offramp_currency?: string;
+  shakepay_deposit_address?: string;
+  auto_offramp_enabled?: boolean;
   [key: string]: unknown;
 }
 
@@ -89,6 +110,14 @@ export function SettlementSettingsContent({ merchant }: { merchant: MerchantData
   const [address, setAddress] = useState(merchant.wallet_address || "");
   const [chain, setChain] = useState(merchant.settlement_chain || "base");
   const [token, setToken] = useState(merchant.settlement_token || "USDC");
+
+  // Offramp preferences
+  const [offrampProvider, setOfframpProvider] = useState(merchant.offramp_provider || "");
+  const [offrampCurrency, setOfframpCurrency] = useState(merchant.offramp_currency || "USD");
+  const [shakepayAddress, setShakepayAddress] = useState(merchant.shakepay_deposit_address || "");
+  const [offrampSaving, setOfframpSaving] = useState(false);
+  const [offrampSaved, setOfframpSaved] = useState(false);
+  const [offrampError, setOfframpError] = useState<string | null>(null);
 
   const chainInfo = CHAINS[chain];
   const chainTokens = chainInfo?.tokens || [];
@@ -293,6 +322,134 @@ export function SettlementSettingsContent({ merchant }: { merchant: MerchantData
             </div>
           </div>
         )}
+      </Card>
+
+      {/* Offramp Preferences */}
+      <Card className="p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Landmark className="h-5 w-5 text-blue-400" />
+          <h2 className="text-lg font-semibold text-white">
+            Offramp Preferences
+          </h2>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Preferred Provider</Label>
+            <Select value={offrampProvider} onValueChange={setOfframpProvider}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a provider" />
+              </SelectTrigger>
+              <SelectContent>
+                {OFFRAMP_PROVIDERS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Offramp Currency</Label>
+            <Select value={offrampCurrency} onValueChange={setOfframpCurrency}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {OFFRAMP_CURRENCIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Shakepay Deposit Address (optional)</Label>
+            <Input
+              value={shakepayAddress}
+              onChange={(e) => setShakepayAddress(e.target.value.trim())}
+              placeholder="0x... (Ethereum ERC-20 address)"
+            />
+            <p className="text-xs text-zinc-500">
+              Save your Shakepay USDC deposit address for quick access from the
+              Cash Out page.
+            </p>
+          </div>
+
+          {/* Auto-offramp — coming soon */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
+            <div className="flex items-center gap-2">
+              <Lock className="h-4 w-4 text-zinc-500" />
+              <span className="text-sm text-zinc-400">
+                Auto-offramp after payment
+              </span>
+            </div>
+            <Badge
+              variant="outline"
+              className="text-xs text-zinc-500 border-zinc-700"
+            >
+              Coming Soon
+            </Badge>
+          </div>
+
+          {offrampError && (
+            <div className="flex items-center gap-2 text-sm text-red-400 bg-red-400/10 rounded-lg px-4 py-3">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {offrampError}
+            </div>
+          )}
+
+          {offrampSaved && (
+            <div className="flex items-center gap-2 text-sm text-emerald-400">
+              <Check className="h-4 w-4" />
+              Offramp preferences saved.
+            </div>
+          )}
+
+          <Button
+            onClick={async () => {
+              setOfframpSaving(true);
+              setOfframpError(null);
+              try {
+                const res = await fetch("/api/v1/internal/onboarding", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    offramp_provider: offrampProvider || null,
+                    offramp_currency: offrampCurrency,
+                    shakepay_deposit_address: shakepayAddress || null,
+                  }),
+                });
+                if (!res.ok) throw new Error("Failed to save offramp preferences");
+                setOfframpSaved(true);
+                setTimeout(() => setOfframpSaved(false), 3000);
+                router.refresh();
+              } catch (err) {
+                setOfframpError(
+                  err instanceof Error ? err.message : "Failed to save"
+                );
+              } finally {
+                setOfframpSaving(false);
+              }
+            }}
+            disabled={offrampSaving}
+          >
+            {offrampSaving ? (
+              <span className="flex items-center gap-2">
+                <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Saving...
+              </span>
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                Save Offramp Preferences
+              </>
+            )}
+          </Button>
+        </div>
       </Card>
 
       {/* Exchange offramp guide */}

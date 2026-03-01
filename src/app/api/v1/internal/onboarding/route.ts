@@ -28,8 +28,11 @@ export async function PATCH(request: NextRequest) {
     thirdweb_auth_method,
     currency,
     timezone,
+    offramp_provider,
+    offramp_currency,
+    shakepay_deposit_address,
   } = body as {
-    tier: string;
+    tier?: string;
     wallet_address?: string;
     settlement_chain?: string;
     settlement_token?: string;
@@ -37,6 +40,9 @@ export async function PATCH(request: NextRequest) {
     thirdweb_auth_method?: string;
     currency?: string;
     timezone?: string;
+    offramp_provider?: string | null;
+    offramp_currency?: string;
+    shakepay_deposit_address?: string | null;
   };
 
   const validTiers = [
@@ -44,14 +50,18 @@ export async function PATCH(request: NextRequest) {
     // Legacy tiers (accept for backwards compat during migration)
     "quick_start", "byoe", "byow", "custom",
   ];
-  if (!tier || !validTiers.includes(tier)) {
+
+  // tier is required for onboarding but optional for settings updates
+  if (tier && !validTiers.includes(tier)) {
     return apiError("Invalid onboarding tier", 400);
   }
 
-  const updateData: Record<string, unknown> = {
-    onboarding_completed: true,
-    onboarding_tier: tier,
-  };
+  const updateData: Record<string, unknown> = {};
+
+  if (tier) {
+    updateData.onboarding_completed = true;
+    updateData.onboarding_tier = tier;
+  }
 
   if (wallet_address !== undefined) updateData.wallet_address = wallet_address;
   if (settlement_chain) updateData.settlement_chain = settlement_chain;
@@ -60,6 +70,9 @@ export async function PATCH(request: NextRequest) {
   if (thirdweb_auth_method) updateData.thirdweb_auth_method = thirdweb_auth_method;
   if (currency) updateData.currency = currency;
   if (timezone) updateData.timezone = timezone;
+  if (offramp_provider !== undefined) updateData.offramp_provider = offramp_provider;
+  if (offramp_currency !== undefined) updateData.offramp_currency = offramp_currency;
+  if (shakepay_deposit_address !== undefined) updateData.shakepay_deposit_address = shakepay_deposit_address;
 
   const { data: merchant, error } = await supabase
     .from("merchants")
