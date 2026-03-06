@@ -9,9 +9,9 @@
 
 ## Executive Summary
 
-The goBlink Merchant platform demonstrates **solid foundational security practices**: RLS is enabled on all tables, API keys are bcrypt-hashed, HMAC-SHA256 webhook signing is implemented, CRON_SECRET protects cron endpoints, and a Content Security Policy is configured. The code uses parameterized queries via the Supabase client (no raw SQL), and sensitive env vars are properly excluded from the client bundle.
+The goBlink Merchant platform demonstrates **solid foundational security practices**: RLS is enabled on most tables, API keys are bcrypt-hashed, HMAC-SHA256 webhook signing is implemented, CRON_SECRET protects cron endpoints, and a Content Security Policy is configured. The code uses parameterized queries via the Supabase client (no raw SQL), and sensitive env vars are properly excluded from the client bundle.
 
-However, this audit identified **4 critical**, **7 high**, **6 medium**, and **4 low** severity findings (21 total). The critical issues center around: (1) webhook secrets stored in plaintext in the database, (2) CRON_SECRET validated with a non-constant-time string comparison vulnerable to timing attacks, (3) the public quote endpoint allowing unauthenticated real deposit submission (money movement), and (4) the simulate endpoint being accessible without authentication.
+However, this audit identified **8 critical**, **7 high**, **8 medium**, and **4 low** severity findings (27 total). The most severe issues include: `admins` table with no RLS (any user can self-promote to admin), `email_templates` with no RLS (phishing injection), CRON_SECRET timing attacks, unauthenticated real deposit submission, merchant `user_id` mutation enabling account hijacking, and webhook secrets in plaintext.
 
 ---
 
@@ -92,6 +92,69 @@ const supabase = await createClient();
 const { data: { user } } = await supabase.auth.getUser();
 if (!user) return apiError("Unauthorized", 401);
 // Verify user owns the merchant
+```
+
+---
+
+### C5: `admins` table has NO RLS -- any authenticated user can make themselves admin
+
+**File:** `supabase/migrations/00003_admin_tables.sql:9-18`
+
+**Description:** The `admins` table has no RLS enabled. The comment says "only accessed via service role client," but Supabase grants the `authenticated` role full access to `public` schema tables by default. Any logged-in merchant can:
+```sql
+INSERT INTO admins (user_id) VALUES ('their-user-id');
+```
+This grants them full admin access: suspending other merchants, viewing all merchant data, modifying email templates. **This is a complete privilege escalation to platform admin.**
+
+**Suggested fix:**
+```sql
+ALTER TABLE admins ENABLE ROW LEVEL SECURITY;
+-- No policies = only service_role can access (which bypasses RLS)
+```
+
+---
+
+### C6: `email_templates` table has NO RLS -- any user can inject phishing templates
+
+**File:** `supabase/migrations/00007_email_templates.sql:4-15`
+
+**Description:** Same issue as C5. No RLS on `email_templates`. Any authenticated user can modify the `verification` or `password_reset` email template to inject phishing URLs. These templates are used system-wide, so a malicious merchant could change the verification template to redirect new users to a phishing page that harvests credentials.
+
+**Suggested fix:**
+```sql
+ALTER TABLE email_templates ENABLE ROW LEVEL SECURITY;
+```
+
+---
+
+### C7: `handle_new_user()` SECURITY DEFINER function has no search_path lock
+
+**File:** `supabase/migrations/00001_initial_schema.sql:334-341`
+
+**Description:** The trigger function runs as `SECURITY DEFINER` (superuser-equivalent context) but doesn't set `search_path`:
+```sql
+$$ language 'plpgsql' SECURITY DEFINER;  -- Missing: SET search_path = public
+```
+This is a classic Postgres privilege escalation vector. An attacker who can manipulate `search_path` could shadow the `merchants` table and execute arbitrary SQL in the definer's security context.
+
+**Suggested fix:**
+```sql
+$$ language 'plpgsql' SECURITY DEFINER SET search_path = public;
+```
+
+---
+
+### C8: Merchants UPDATE policy allows `user_id` column mutation -- account hijacking
+
+**File:** `supabase/migrations/00001_initial_schema.sql:198-199`
+
+**Description:** The merchants UPDATE policy has `USING (auth.uid() = user_id)` but no `WITH CHECK` clause. A merchant can update their own record's `user_id` column to point to another user's ID. Since all RLS policies chain through `merchants.user_id`, this breaks the entire authorization model and could let an attacker hijack another merchant's data.
+
+**Suggested fix:**
+```sql
+CREATE POLICY "merchants_update_own" ON merchants
+  FOR UPDATE USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 ```
 
 ---
@@ -361,6 +424,26 @@ const netAmount = netCents / 100;
 
 ---
 
+### M7: `ticket_messages` policy allows merchants to forge admin replies
+
+**File:** `supabase/migrations/00004_tickets.sql:38-44`
+
+**Description:** The `FOR ALL` policy on `ticket_messages` checks ticket ownership but does not constrain `sender_type` or `sender_id`. A merchant can INSERT a message with `sender_type = 'admin'` and any `sender_id`, making it appear as if an admin responded. This could be used for social engineering in shared support contexts.
+
+**Suggested fix:** Split into separate policies. For INSERT, add `WITH CHECK` enforcing `sender_type = 'merchant' AND sender_id = auth.uid()`.
+
+---
+
+### M8: Payments UPDATE policy allows merchant to change status/amount/fees
+
+**File:** `supabase/migrations/00001_initial_schema.sql:224-227`
+
+**Description:** The payments UPDATE policy allows a merchant to update ANY column on their own payments via the client-side Supabase client, including `status`, `amount`, `confirmed_at`, `fee_amount`, and `net_amount`. A compromised session could mark payments as confirmed without actual payment, or alter amounts. Payment status changes should be service-role only.
+
+**Suggested fix:** Remove the UPDATE policy for payments (all updates go through service role), or add a trigger preventing changes to financial columns.
+
+---
+
 ## LOW Priority / Code Quality
 
 ### L1: API key validation scans all keys with matching prefix -- O(n) bcrypt comparisons
@@ -410,16 +493,18 @@ return apiError("Failed to create payment", 500);
 
 ---
 
-### L4: `rate_limits` table has no RLS -- publicly accessible
+### L4: `rate_limits` table has no RLS -- rate limit bypass
 
 **File:** `supabase/migrations/00002_security_hardening.sql:33-37`
 
-**Description:** The `rate_limits` table does not have RLS enabled. While this table is only accessed via the `check_rate_limit` RPC function (which runs as `SECURITY INVOKER`), the table itself is accessible to any authenticated Supabase user who discovers it. An attacker could read rate limit keys (which contain IP addresses) or delete entries to bypass rate limiting.
+**Description:** The `rate_limits` table does not have RLS enabled. Any authenticated user can delete their rate limit entries to bypass rate limiting, or flood other keys to cause denial of service. Combined with the `check_rate_limit` function being callable by any authenticated user, this allows complete rate limit manipulation.
 
 **Suggested fix:**
 ```sql
 ALTER TABLE rate_limits ENABLE ROW LEVEL SECURITY;
 -- No user-facing policies needed -- only accessed via service client
+REVOKE EXECUTE ON FUNCTION check_rate_limit FROM authenticated, anon;
+REVOKE EXECUTE ON FUNCTION cleanup_rate_limits FROM authenticated, anon;
 ```
 
 ---
@@ -449,6 +534,10 @@ These areas are implemented well:
 | C2 | CRITICAL | CRON_SECRET timing attack vulnerability | `settle-payments/route.ts:24`, all cron routes |
 | C3 | CRITICAL | Quote endpoint allows real deposits unauthenticated | `checkout/quote/route.ts:59` |
 | C4 | CRITICAL | Simulate endpoint unauthenticated | `simulate/route.ts:17` |
+| C5 | CRITICAL | `admins` table has NO RLS -- privilege escalation | `00003_admin_tables.sql:9` |
+| C6 | CRITICAL | `email_templates` has NO RLS -- phishing injection | `00007_email_templates.sql:4` |
+| C7 | CRITICAL | SECURITY DEFINER without search_path | `00001_initial_schema.sql:341` |
+| C8 | CRITICAL | Merchants UPDATE allows `user_id` mutation | `00001_initial_schema.sql:198` |
 | H1 | HIGH | Webhook URLs -- no SSRF protection | `webhooks.ts:51`, `webhooks/route.ts:49` |
 | H2 | HIGH | Rate limiting fails open | `rate-limit.ts:43-45` |
 | H3 | HIGH | No rate limiting on API routes | `v1/payments/route.ts` |
@@ -462,6 +551,8 @@ These areas are implemented well:
 | M4 | MEDIUM | Webhook secret in API response | `webhooks/route.ts:79` |
 | M5 | MEDIUM | No max payment expiration | `v1/payments/route.ts:68` |
 | M6 | MEDIUM | Floating-point fee math | `settle-payments/route.ts:57` |
+| M7 | MEDIUM | ticket_messages allows sender forgery | `00004_tickets.sql:38` |
+| M8 | MEDIUM | Payments UPDATE policy too permissive | `00001_initial_schema.sql:224` |
 | L1 | LOW | O(n) bcrypt key validation | `api-auth.ts:36` |
 | L2 | LOW | No audit_logs INSERT policy | `00002_security_hardening.sql:24` |
 | L3 | LOW | Error messages leak internals | `v1/payments/route.ts:95` |
