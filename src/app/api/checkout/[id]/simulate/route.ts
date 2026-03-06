@@ -81,7 +81,7 @@ export async function POST(
     });
   }
 
-  // Confirm the payment
+  // Confirm the payment — guard on status to prevent overwriting a real confirmed payment
   const { error: confirmError } = await supabase
     .from("payments")
     .update({
@@ -92,7 +92,8 @@ export async function POST(
       customer_wallet: "0xTEST_SIMULATED_WALLET",
       customer_chain: "test",
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "processing");
 
   if (confirmError) {
     return withCors(request, apiError("Failed to confirm test payment", 500));
