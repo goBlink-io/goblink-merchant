@@ -20,8 +20,10 @@ import {
   Loader2,
   CreditCard,
   ExternalLink,
+  ArrowDownToLine,
 } from "lucide-react";
 import Link from "next/link";
+import { SettlementQR } from "@/components/dashboard/settlement-qr";
 
 const statusTimeline = [
   { key: "pending", label: "Created", icon: Clock },
@@ -369,6 +371,75 @@ export default async function PaymentDetailPage({
               </div>
             </CardContent>
           </Card>
+
+          {/* Settlement Status */}
+          {payment.settlement_status && payment.settlement_status !== "none" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ArrowDownToLine className="h-4 w-4 text-zinc-400" />
+                  Settlement
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <p className="text-xs text-zinc-500 mb-0.5">Status</p>
+                  <Badge
+                    className={
+                      payment.settlement_status === "settled"
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                        : payment.settlement_status === "failed"
+                          ? "bg-red-500/10 text-red-400 border-red-500/30"
+                          : "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                    }
+                    variant="outline"
+                  >
+                    {payment.settlement_status}
+                  </Badge>
+                </div>
+                {payment.settlement_chain && (
+                  <DetailItem
+                    label="Settlement Chain"
+                    value={payment.settlement_chain}
+                  />
+                )}
+                {payment.settlement_token && (
+                  <DetailItem
+                    label="Settlement Token"
+                    value={payment.settlement_token}
+                  />
+                )}
+                {payment.intent_id && (
+                  <DetailItem
+                    label="Intent ID"
+                    value={truncateAddress(payment.intent_id, 10)}
+                    copyValue={payment.intent_id}
+                    isHash
+                  />
+                )}
+                {payment.settled_at && (
+                  <DetailItem
+                    label="Settled At"
+                    value={formatDate(payment.settled_at)}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Deposit Address QR Code */}
+          {payment.deposit_address &&
+            (payment.status === "pending" || payment.status === "processing" ||
+             payment.settlement_status === "pending") && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Deposit QR</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SettlementQR depositAddress={payment.deposit_address} />
+              </CardContent>
+            </Card>
+          )}
 
           {/* Quick Info */}
           <Card>
