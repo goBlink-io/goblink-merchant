@@ -33,7 +33,7 @@ export const SUPPORTED_CURRENCIES: Record<
  * Get the exchange rate from USD to a target currency.
  * Reads from the exchange_rates table (cached by cron).
  */
-export async function getExchangeRate(targetCurrency: string): Promise<number> {
+export async function getExchangeRate(targetCurrency: string): Promise<number | null> {
   if (targetCurrency === "USD") return 1;
 
   const supabase = getServiceClient();
@@ -44,7 +44,9 @@ export async function getExchangeRate(targetCurrency: string): Promise<number> {
     .eq("target_currency", targetCurrency.toUpperCase())
     .single();
 
-  return data ? Number(data.rate) : 1;
+  // Return null instead of fallback 1.0 — a missing rate for JPY/KRW
+  // would be 150x/1300x off, which is worse than showing an error (L7)
+  return data ? Number(data.rate) : null;
 }
 
 /**
@@ -56,6 +58,9 @@ export async function convertAmount(
 ): Promise<number> {
   if (targetCurrency === "USD") return amountUsd;
   const rate = await getExchangeRate(targetCurrency);
+  if (rate === null) {
+    throw new Error(`Exchange rate unavailable for ${targetCurrency}`);
+  }
   return amountUsd * rate;
 }
 
@@ -68,7 +73,9 @@ export async function convertToUsd(
 ): Promise<number> {
   if (sourceCurrency === "USD") return amount;
   const rate = await getExchangeRate(sourceCurrency);
-  if (rate === 0) return amount;
+  if (rate === null || rate === 0) {
+    throw new Error(`Exchange rate unavailable for ${sourceCurrency}`);
+  }
   return amount / rate;
 }
 

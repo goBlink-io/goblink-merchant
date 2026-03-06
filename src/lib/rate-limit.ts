@@ -16,6 +16,7 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   "api-create-payment":  { window: 60, max: 60 },   // 60 payments/min per API key
   "api-refund":          { window: 60, max: 10 },   // 10 refunds/min per API key
   "api-create-webhook":  { window: 60, max: 10 },   // 10 webhook registrations/min per API key
+  "invoice-send":        { window: 3600, max: 3 },  // 3 sends/hour per merchant+recipient (M22)
 };
 
 function getClientIp(request: NextRequest): string {

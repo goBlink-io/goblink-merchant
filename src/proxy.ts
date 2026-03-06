@@ -6,6 +6,47 @@ import { updateSession } from "@/lib/supabase/middleware";
 export async function proxy(request: NextRequest) {
   const response = await updateSession(request);
 
+  // Check if merchant is suspended (M11) — applies to dashboard routes
+  if (request.nextUrl.pathname.startsWith("/dashboard")) {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll() {
+            // Read-only context
+          },
+        },
+      }
+    );
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      const serviceClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+
+      const { data: merchant } = await serviceClient
+        .from("merchants")
+        .select("suspended_at")
+        .eq("user_id", user.id)
+        .single();
+
+      if (merchant?.suspended_at) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/suspended";
+        return NextResponse.redirect(url);
+      }
+    }
+  }
+
   // Admin route protection
   if (request.nextUrl.pathname.startsWith("/admin")) {
     const supabase = createServerClient(

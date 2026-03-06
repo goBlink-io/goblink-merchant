@@ -67,6 +67,19 @@ export function generateOfframpUrl(params: {
 }): string {
   const { sessionToken, merchantId, walletAddress, chain, redirectUrl } = params;
 
+  // Validate redirectUrl against trusted domains (M21)
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  try {
+    const redirectParsed = new URL(redirectUrl);
+    const appParsed = new URL(appUrl);
+    if (redirectParsed.hostname !== appParsed.hostname) {
+      throw new Error(`Untrusted redirect domain: ${redirectParsed.hostname}`);
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("Untrusted")) throw err;
+    throw new Error("Invalid redirectUrl");
+  }
+
   // Map goBlink chain names to Coinbase chain identifiers
   const chainMap: Record<string, string> = {
     base: "base",

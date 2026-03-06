@@ -48,13 +48,15 @@ export async function validateApiKey(
 
   const supabase = getServiceClient();
 
-  // Get all active API keys and check against bcrypt hashes
-  // We use the prefix to narrow down candidates
+  // Lookup by key_prefix to narrow bcrypt candidates to 1-2 rows (L1).
+  // For O(1) lookup, add a SHA-256 lookup_hash column indexed in the
+  // api_keys table and match on that instead of iterating bcrypt hashes.
+  // Current approach: prefix lookup limits bcrypt comparisons to ~1-2 keys.
   const prefix = apiKey.slice(0, apiKey.indexOf("_", 3) + 1 + 8); // e.g., "gb_live_" + first 8 chars
   const { data: keys, error } = await supabase
     .from("api_keys")
     .select("id, merchant_id, key_hash, is_test, allowed_ips, merchants!inner(suspended_at)")
-    .like("key_prefix", `${prefix.slice(0, 12)}%`);
+    .eq("key_prefix", prefix);
 
   if (error || !keys || keys.length === 0) {
     return null;

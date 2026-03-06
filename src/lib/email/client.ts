@@ -54,7 +54,10 @@ export async function sendEmail(options: SendEmailOptions): Promise<{ success: b
       return { success: false };
     }
 
-    console.log("[email] Sent:", options.subject, "→", options.to, "id:", result.data?.id);
+    // Sanitize PII: only log first 3 chars of email local part + domain (L5)
+    const [local, domain] = options.to.split("@");
+    const sanitizedEmail = `${local?.slice(0, 3)}***@${domain}`;
+    console.log("[email] Sent:", options.subject, "→", sanitizedEmail, "id:", result.data?.id);
     return { success: true, id: result.data?.id };
   } catch (err) {
     console.error("[email] Resend error:", err);
