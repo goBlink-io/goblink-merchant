@@ -4,6 +4,19 @@ import { getExchangeRate, formatCurrencyAmount } from "@/lib/forex";
 
 export const dynamic = "force-dynamic";
 
+/** Prefix values that could trigger formula execution in spreadsheet apps */
+function csvSanitize(val: string): string {
+  if (/^[=+\-@\t\r]/.test(val)) {
+    return `'${val}`;
+  }
+  return val;
+}
+
+/** Strip everything except alphanumeric, hyphens, underscores, and dots from filenames */
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, "");
+}
+
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
   const {
@@ -69,7 +82,7 @@ export async function GET(request: NextRequest) {
           }
         : {}),
     }));
-    const filename = `payments-${startDate || "all"}-${endDate || "now"}.json`;
+    const filename = sanitizeFilename(`payments-${startDate || "all"}-${endDate || "now"}.json`);
     return new NextResponse(JSON.stringify(enriched, null, 2), {
       headers: {
         "Content-Type": "application/json",
@@ -110,11 +123,14 @@ export async function GET(request: NextRequest) {
   const csv = [
     headers.join(","),
     ...rows.map((r) =>
-      r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")
+      r.map((v) => {
+        const sanitized = csvSanitize(String(v));
+        return `"${sanitized.replace(/"/g, '""')}"`;
+      }).join(",")
     ),
   ].join("\n");
 
-  const filename = `payments-${startDate || "all"}-${endDate || "now"}.csv`;
+  const filename = sanitizeFilename(`payments-${startDate || "all"}-${endDate || "now"}.csv`);
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
