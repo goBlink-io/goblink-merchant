@@ -51,9 +51,18 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: { message: "Unauthorized" } }, { status: 401 });
 
+  const { data: merchant } = await supabase
+    .from("merchants")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!merchant) return NextResponse.json({ error: { message: "Merchant not found" } }, { status: 404 });
+
   const { data: tickets } = await supabase
     .from("tickets")
     .select("*")
+    .eq("merchant_id", merchant.id)
     .order("created_at", { ascending: false });
 
   return NextResponse.json(tickets ?? []);
