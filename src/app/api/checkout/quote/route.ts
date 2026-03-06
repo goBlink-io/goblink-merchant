@@ -12,7 +12,7 @@ export async function OPTIONS(request: NextRequest) {
 // POST /api/checkout/quote — Public. Get a swap quote from 1Click.
 export async function POST(request: NextRequest) {
   // Rate limit
-  const rl = await checkRateLimit(request, "checkout-quote");
+  const rl = await checkRateLimit(request, "checkout-quote", undefined, true);
   if (!rl.allowed) return withCors(request, rl.response!);
 
   let body: Record<string, unknown>;

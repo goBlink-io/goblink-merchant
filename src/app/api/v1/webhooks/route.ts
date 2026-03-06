@@ -5,6 +5,7 @@ import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
 import { validateWebhookUrl } from "@/lib/webhooks";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // POST /api/v1/webhooks — Register a webhook endpoint
 export async function POST(request: NextRequest) {
@@ -15,6 +16,10 @@ export async function POST(request: NextRequest) {
   if (!auth) {
     return apiError("Invalid or missing API key", 401);
   }
+
+  // Rate limit by API key ID (fail-closed for webhook creation)
+  const rl = await checkRateLimit(request, "api-create-webhook", auth.keyId);
+  if (!rl.allowed) return rl.response!;
 
   let body: Record<string, unknown>;
   try {

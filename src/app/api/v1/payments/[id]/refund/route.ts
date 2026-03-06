@@ -4,6 +4,7 @@ import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { dispatchWebhooks } from "@/lib/webhooks";
 import { logAudit } from "@/lib/audit";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // POST /api/v1/payments/:id/refund — Initiate refund
 export async function POST(
@@ -18,6 +19,10 @@ export async function POST(
   if (!auth) {
     return apiError("Invalid or missing API key", 401);
   }
+
+  // Rate limit by API key ID (fail-closed for refunds)
+  const rl = await checkRateLimit(request, "api-refund", auth.keyId);
+  if (!rl.allowed) return rl.response!;
 
   let body: Record<string, unknown>;
   try {

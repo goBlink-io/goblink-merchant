@@ -25,7 +25,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   // Rate limit
-  const rl = await checkRateLimit(request, "checkout-complete");
+  const rl = await checkRateLimit(request, "checkout-complete", undefined, true);
   if (!rl.allowed) return withCors(request, rl.response!);
 
   const { id } = await params;

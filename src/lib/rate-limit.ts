@@ -13,6 +13,9 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   "checkout-tokens":   { window: 60, max: 30 },   // 30 token fetches/min per IP
   "checkout-get":      { window: 60, max: 30 },   // 30 checkout page loads/min per IP
   "checkout-default":  { window: 60, max: 30 },   // 30 req/min default
+  "api-create-payment":  { window: 60, max: 60 },   // 60 payments/min per API key
+  "api-refund":          { window: 60, max: 10 },   // 10 refunds/min per API key
+  "api-create-webhook":  { window: 60, max: 10 },   // 10 webhook registrations/min per API key
 };
 
 function getClientIp(request: NextRequest): string {
@@ -25,11 +28,28 @@ function getClientIp(request: NextRequest): string {
 
 export async function checkRateLimit(
   request: NextRequest,
-  bucket: string
+  bucket: string,
+  keyOverride?: string,
+  failOpen: boolean = false
 ): Promise<{ allowed: boolean; remaining: number; response?: NextResponse }> {
   const config = RATE_LIMITS[bucket] || RATE_LIMITS["checkout-default"];
-  const ip = getClientIp(request);
-  const key = `${bucket}:${ip}`;
+  const key = keyOverride ? `${bucket}:${keyOverride}` : `${bucket}:${getClientIp(request)}`;
+
+  const denyResponse = () => {
+    const response = NextResponse.json(
+      { error: { message: "Too many requests", status: 429 } },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(config.window),
+          "X-RateLimit-Limit": String(config.max),
+          "X-RateLimit-Remaining": "0",
+          "X-RateLimit-Reset": String(config.window),
+        },
+      }
+    );
+    return { allowed: false as const, remaining: 0, response };
+  };
 
   try {
     const supabase = getServiceClient();
@@ -40,34 +60,22 @@ export async function checkRateLimit(
     });
 
     if (error || !data || data.length === 0) {
-      // On error, allow the request (fail open) but log
       console.error("[rate-limit] RPC error:", error?.message);
-      return { allowed: true, remaining: config.max };
+      if (failOpen) return { allowed: true, remaining: config.max };
+      return denyResponse();
     }
 
     const { allowed, remaining } = data[0] as { allowed: boolean; remaining: number };
 
     if (!allowed) {
-      const response = NextResponse.json(
-        { error: { message: "Too many requests", status: 429 } },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": String(config.window),
-            "X-RateLimit-Limit": String(config.max),
-            "X-RateLimit-Remaining": "0",
-            "X-RateLimit-Reset": String(config.window),
-          },
-        }
-      );
-      return { allowed: false, remaining: 0, response };
+      return denyResponse();
     }
 
     return { allowed: true, remaining };
   } catch (err) {
-    // Fail open on unexpected errors
     console.error("[rate-limit] Unexpected error:", err);
-    return { allowed: true, remaining: config.max };
+    if (failOpen) return { allowed: true, remaining: config.max };
+    return denyResponse();
   }
 }
 

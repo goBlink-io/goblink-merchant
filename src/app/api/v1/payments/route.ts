@@ -4,6 +4,7 @@ import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { dispatchWebhooks } from "@/lib/webhooks";
 import { convertToUsd, getSupportedCurrencies } from "@/lib/forex";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // POST /api/v1/payments — Create a payment
 export async function POST(request: NextRequest) {
@@ -14,6 +15,10 @@ export async function POST(request: NextRequest) {
   if (!auth) {
     return apiError("Invalid or missing API key", 401);
   }
+
+  // Rate limit by API key ID (fail-closed for payment creation)
+  const rl = await checkRateLimit(request, "api-create-payment", auth.keyId);
+  if (!rl.allowed) return rl.response!;
 
   let body: Record<string, unknown>;
   try {
