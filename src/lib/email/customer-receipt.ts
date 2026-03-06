@@ -1,5 +1,5 @@
 import { sendEmail } from "./client";
-import { getTemplate, renderTemplate } from "./sender";
+import { getTemplate, renderTemplate, htmlEncode } from "./sender";
 import { getExplorerTxUrl } from "@/lib/explorer";
 import { truncateAddress, formatDate } from "@/lib/utils";
 
@@ -78,10 +78,11 @@ export async function sendCustomerReceiptEmail(
       });
     } else {
       // Minimal fallback
+      const safeMerchantName = htmlEncode(merchant?.business_name || "the merchant");
       await sendEmail({
         to: payment.customer_email,
         subject: `Your payment receipt — ${payment.amount} ${payment.currency}`,
-        html: `<p>Your payment of ${payment.amount} ${payment.currency} to ${merchant?.business_name || "the merchant"} has been confirmed.</p><p><a href="${receiptUrl}">View receipt</a></p><p style="color:#666;font-size:12px">Powered by goBlink</p>`,
+        html: `<p>Your payment of ${htmlEncode(String(payment.amount))} ${htmlEncode(payment.currency)} to ${safeMerchantName} has been confirmed.</p><p><a href="${htmlEncode(receiptUrl)}">View receipt</a></p><p style="color:#666;font-size:12px">Powered by goBlink</p>`,
         text: `Your payment of ${payment.amount} ${payment.currency} has been confirmed. View receipt: ${receiptUrl}`,
       });
     }
