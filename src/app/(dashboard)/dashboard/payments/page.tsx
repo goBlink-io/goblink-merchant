@@ -82,7 +82,7 @@ export default async function PaymentsPage({
         perPage={perPage}
         currency={merchant.currency}
         displayCurrency={displayCurrency}
-        exchangeRate={exchangeRate}
+        exchangeRate={exchangeRate ?? 1}
         currentStatus={params.status || "all"}
         currentSearch={params.search || ""}
         merchantId={merchant.id}
