@@ -5,6 +5,7 @@ import { dispatchWebhooks } from "@/lib/webhooks";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
 import { insertNotification } from "@/lib/notifications";
+import { timingSafeCompare } from "@/lib/timing-safe";
 
 const FEE_RATE = 0.01; // 1%
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
     return apiError("CRON_SECRET not configured", 500);
   }
 
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!authHeader || !timingSafeCompare(authHeader, `Bearer ${cronSecret}`)) {
     return apiError("Unauthorized", 401);
   }
 

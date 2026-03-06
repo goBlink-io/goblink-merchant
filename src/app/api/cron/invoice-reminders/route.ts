@@ -5,6 +5,7 @@ import { sendEmail } from "@/lib/email/client";
 import { InvoiceReminderEmail } from "@/lib/email/templates/invoice-reminder";
 import { insertNotification } from "@/lib/notifications";
 import React from "react";
+import { timingSafeCompare } from "@/lib/timing-safe";
 
 // GET /api/cron/invoice-reminders — Vercel Cron endpoint.
 // Sends reminder emails for overdue unpaid invoices.
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
     return apiError("CRON_SECRET not configured", 500);
   }
 
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!authHeader || !timingSafeCompare(authHeader, `Bearer ${cronSecret}`)) {
     return apiError("Unauthorized", 401);
   }
 

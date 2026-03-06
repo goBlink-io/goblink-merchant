@@ -5,6 +5,7 @@ import { dispatchWebhooks } from "@/lib/webhooks";
 import { logAudit } from "@/lib/audit";
 import { checkRateLimit, withRateLimitHeaders } from "@/lib/rate-limit";
 import { withCors, handleCorsOptions } from "@/lib/cors";
+import { timingSafeCompare } from "@/lib/timing-safe";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -155,7 +156,7 @@ export async function PATCH(
     return apiError("CRON_SECRET not configured", 500);
   }
 
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!authHeader || !timingSafeCompare(authHeader, `Bearer ${cronSecret}`)) {
     return apiError("Unauthorized", 401);
   }
 
