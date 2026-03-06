@@ -89,7 +89,7 @@ export async function POST(
     return apiError(`Failed to update invoice status: ${error.message}`, 500);
   }
 
-  logAudit({
+  await logAudit({
     merchantId: merchant.id,
     actor: user.id,
     action: "invoice.sent",

@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
           `/dashboard/payments/${payment.id}`
         );
 
-        logAudit({
+        await logAudit({
           merchantId: payment.merchant_id,
           actor: "system",
           action: "payment.confirmed",
@@ -274,7 +274,7 @@ export async function GET(request: NextRequest) {
           `/dashboard/payments/${payment.id}`
         );
 
-        logAudit({
+        await logAudit({
           merchantId: payment.merchant_id,
           actor: "system",
           action: "payment.failed",
@@ -308,7 +308,7 @@ export async function GET(request: NextRequest) {
           },
         });
 
-        logAudit({
+        await logAudit({
           merchantId: payment.merchant_id,
           actor: "system",
           action: "payment.refunded",
