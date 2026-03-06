@@ -35,7 +35,8 @@ export async function DELETE(
   const { error } = await supabase
     .from("webhook_endpoints")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("merchant_id", auth.merchantId);
 
   if (error) {
     return apiError(`Failed to delete webhook: ${error.message}`, 500);
