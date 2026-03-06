@@ -101,6 +101,7 @@ export async function deliverWebhook(
     return { success: false, status: null, body: `Blocked: ${msg}` };
   }
 
+  const deliveryId = crypto.randomUUID();
   const payload = JSON.stringify(event);
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signature = signPayload(`${timestamp}.${payload}`, secret);
@@ -119,6 +120,7 @@ export async function deliverWebhook(
         "X-GoBlink-Signature": signature,
         "X-GoBlink-Timestamp": timestamp,
         "X-GoBlink-Event": event.event,
+        "X-Webhook-Delivery-ID": deliveryId,
         "User-Agent": "goBlink-Webhook/1.0",
       },
       body: payload,
@@ -243,6 +245,7 @@ export async function processRetryDelivery(delivery: {
     return false;
   }
 
+  const retryDeliveryId = crypto.randomUUID();
   const payload = JSON.stringify(delivery.payload);
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signature = signPayload(`${timestamp}.${payload}`, endpoint.secret);
@@ -261,6 +264,7 @@ export async function processRetryDelivery(delivery: {
         "X-GoBlink-Signature": signature,
         "X-GoBlink-Timestamp": timestamp,
         "X-GoBlink-Event": delivery.event,
+        "X-Webhook-Delivery-ID": retryDeliveryId,
         "User-Agent": "goBlink-Webhook/1.0",
       },
       body: payload,
