@@ -70,6 +70,16 @@ export async function POST(request: NextRequest) {
     paymentMetadata.original_amount = Number(amount);
   }
 
+  // Validate expiry bounds (M9): min 5 minutes, max 1440 minutes (24 hours)
+  if (expiresInMinutes !== undefined) {
+    if (expiresInMinutes < 5) {
+      return apiError("expiresInMinutes must be at least 5", 400);
+    }
+    if (expiresInMinutes > 1440) {
+      return apiError("expiresInMinutes must not exceed 1440 (24 hours)", 400);
+    }
+  }
+
   const expiresAt = expiresInMinutes
     ? new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString()
     : new Date(Date.now() + 60 * 60 * 1000).toISOString(); // Default 1 hour

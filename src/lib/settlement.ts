@@ -25,8 +25,9 @@ export type SettlementStatusResult = {
 // --- Helpers ---
 
 /** Build 1Click destination asset ID from chain + token (e.g. "base:mainnet:USDC") */
-export function buildDestinationAsset(chain: string, token: string): string {
-  return `${chain}:mainnet:${token}`;
+export function buildDestinationAsset(chain: string, token: string, isTest: boolean = false): string {
+  const network = isTest ? "testnet" : "mainnet";
+  return `${chain}:${network}:${token}`;
 }
 
 /** Token decimal places for common settlement tokens */
@@ -61,6 +62,7 @@ export async function initiateSettlement(params: {
   merchantWallet: string;
   settlementChain: string;
   settlementToken: string;
+  isTest?: boolean;
 }): Promise<SettlementInitResult> {
   const {
     paymentId,
@@ -70,9 +72,10 @@ export async function initiateSettlement(params: {
     merchantWallet,
     settlementChain,
     settlementToken,
+    isTest = false,
   } = params;
 
-  const destinationAsset = buildDestinationAsset(settlementChain, settlementToken);
+  const destinationAsset = buildDestinationAsset(settlementChain, settlementToken, isTest);
 
   // Get a live quote (non-dry-run) which returns a deposit address
   const quote = await submitDeposit({
