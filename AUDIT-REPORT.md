@@ -11,7 +11,7 @@
 
 The goBlink Merchant platform demonstrates **solid foundational security practices**: RLS is enabled on all tables, API keys are bcrypt-hashed, HMAC-SHA256 webhook signing is implemented, CRON_SECRET protects cron endpoints, and a Content Security Policy is configured. The code uses parameterized queries via the Supabase client (no raw SQL), and sensitive env vars are properly excluded from the client bundle.
 
-However, this audit identified **4 critical**, **5 high**, **6 medium**, and **4 low** severity findings. The critical issues center around: (1) webhook secrets stored in plaintext in the database, (2) CRON_SECRET validated with a non-constant-time string comparison vulnerable to timing attacks, (3) the public quote endpoint allowing unauthenticated real deposit submission (money movement), and (4) the simulate endpoint being accessible without authentication.
+However, this audit identified **4 critical**, **7 high**, **6 medium**, and **4 low** severity findings (21 total). The critical issues center around: (1) webhook secrets stored in plaintext in the database, (2) CRON_SECRET validated with a non-constant-time string comparison vulnerable to timing attacks, (3) the public quote endpoint allowing unauthenticated real deposit submission (money movement), and (4) the simulate endpoint being accessible without authentication.
 
 ---
 
@@ -212,6 +212,40 @@ script-src 'self' 'unsafe-inline' 'unsafe-eval'
 This significantly weakens the CSP, as any XSS vulnerability can use `eval()` to execute arbitrary code. The comment says "Wallet SDKs need unsafe-inline/eval for injected scripts" -- this is common but should be narrowed.
 
 **Suggested fix:** Audit which wallet SDKs require `unsafe-eval`. Consider using nonce-based CSP (`'nonce-xxx'`) instead of `'unsafe-inline'`, and restrict `'unsafe-eval'` to only the paths that need it (e.g., `/pay/*` checkout pages).
+
+---
+
+### H6: Settlement initiation has no idempotency guard -- double-settlement risk
+
+**File:** `src/lib/settlement.ts:88-97`
+
+**Description:** The `initiateSettlement` function updates the payment with settlement metadata using:
+```typescript
+.eq("id", paymentId);  // No .eq("settlement_status", "none") guard
+```
+If called twice for the same payment (retry, race condition, or duplicate webhook trigger), it will overwrite the deposit address from the first settlement with a new one. The first settlement's funds would be sent to the old deposit address while the DB now points to the new one -- potentially causing funds to be lost or untrackable.
+
+**Suggested fix:** Add `.eq("settlement_status", "none")` to the update query and check affected row count:
+```typescript
+.eq("id", paymentId)
+.eq("settlement_status", "none")
+```
+
+---
+
+### H7: Settlement fee/amount not validated against 1Click actual received amount
+
+**File:** `src/app/api/cron/settlement-status/route.ts:45-47`
+**Also:** `src/app/api/cron/settle-payments/route.ts:57-59`
+
+**Description:** Both settlement crons compute fees from the original `payment.amount` stored in the database, without checking the actual amount received from 1Click:
+```typescript
+const amount = Number(payment.amount);  // Original requested amount
+const feeAmount = Math.round(amount * FEE_RATE * 100) / 100;
+```
+Combined with the 1% default slippage tolerance (`src/lib/oneclick.ts:45`), the recorded `net_amount` could be higher than what was actually received. On a $10,000 payment with max slippage, the merchant sees $9,900 settled but only $9,801 was actually received.
+
+**Suggested fix:** Read `amount_out` from the 1Click execution status response and use it for fee calculation. Log a warning when actual vs expected differs by more than a threshold.
 
 ---
 
@@ -420,6 +454,8 @@ These areas are implemented well:
 | H3 | HIGH | No rate limiting on API routes | `v1/payments/route.ts` |
 | H4 | HIGH | Complete endpoint unauthenticated | `complete/route.ts:22` |
 | H5 | HIGH | CSP allows unsafe-eval | `next.config.ts:6` |
+| H6 | HIGH | Settlement initiation no idempotency guard | `settlement.ts:97` |
+| H7 | HIGH | Settlement amount not validated vs actual | `settlement-status/route.ts:45` |
 | M1 | MEDIUM | Refund race condition | `refunds/route.ts:119` |
 | M2 | MEDIUM | No webhook replay protection | `webhooks.ts:41` |
 | M3 | MEDIUM | Middleware may not be wired | `proxy.ts:58` |
