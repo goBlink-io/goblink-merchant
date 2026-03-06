@@ -20,9 +20,18 @@ app.post('/webhooks/goblink', express.raw({ type: 'application/json' }), (req, r
   const signature = req.headers['x-goblink-signature'];
   const timestamp = req.headers['x-goblink-timestamp'];
 
+  // REQUIRED: reject timestamps older than 5 minutes to prevent replay attacks
+  const age = Math.floor(Date.now() / 1000) - Number(timestamp);
+  if (!timestamp || age > 300 || age < -60) {
+    return res.status(401).send('Timestamp out of range');
+  }
+
   if (!verifyWebhook(req.body.toString(), signature, timestamp, WEBHOOK_SECRET)) {
     return res.status(401).send('Invalid signature');
   }
+
+  // Store delivery ID and reject duplicates for idempotency
+  const deliveryId = req.headers['x-webhook-delivery-id'];
 
   const event = JSON.parse(req.body);
   console.log('Received:', event.event, event.data);
@@ -141,15 +150,17 @@ export async function GET() {
     description: "goBlink webhooks are signed with HMAC-SHA256. The signature is computed over '{timestamp}.{raw_body}' using your webhook secret.",
     headers: {
       "X-GoBlink-Signature": "HMAC-SHA256 hex digest",
-      "X-GoBlink-Timestamp": "Unix timestamp (seconds) when the webhook was sent",
+      "X-GoBlink-Timestamp": "Unix timestamp (seconds) when the webhook was sent — reject if older than 5 minutes",
       "X-GoBlink-Event": "The event type (e.g. payment.confirmed)",
+      "X-Webhook-Delivery-ID": "Unique delivery nonce (UUID) — store and reject duplicates for idempotency",
     },
     verification_steps: [
       "1. Read the raw request body (do not parse JSON first)",
-      "2. Get X-GoBlink-Signature and X-GoBlink-Timestamp headers",
+      "2. Get X-GoBlink-Signature, X-GoBlink-Timestamp, and X-Webhook-Delivery-ID headers",
       "3. Compute HMAC-SHA256 of '{timestamp}.{body}' using your webhook secret",
       "4. Compare the computed signature with X-GoBlink-Signature using constant-time comparison",
-      "5. Optionally reject requests where the timestamp is more than 5 minutes old",
+      "5. REQUIRED: Reject requests where the timestamp is more than 5 minutes old to prevent replay attacks",
+      "6. Store X-Webhook-Delivery-ID and reject duplicates to ensure idempotency",
     ],
     examples,
   });

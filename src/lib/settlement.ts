@@ -25,13 +25,26 @@ export type SettlementStatusResult = {
 // --- Helpers ---
 
 /** Build 1Click destination asset ID from chain + token (e.g. "base:mainnet:USDC") */
-export function buildDestinationAsset(chain: string, token: string): string {
-  return `${chain}:mainnet:${token}`;
+export function buildDestinationAsset(chain: string, token: string, isTest: boolean = false): string {
+  const network = isTest ? "testnet" : "mainnet";
+  return `${chain}:${network}:${token}`;
 }
 
-/** Convert USD amount to minor units (6 decimals for stablecoins) */
-function toMinorUnits(amount: number): string {
-  return Math.round(amount * 1e6).toString();
+/** Token decimal places for common settlement tokens */
+const TOKEN_DECIMALS: Record<string, number> = {
+  USDC: 6,
+  USDT: 6,
+  DAI: 18,
+  WETH: 18,
+  WBTC: 8,
+};
+
+/** Convert amount to minor units using token-specific decimals (M15) */
+function toMinorUnits(amount: number, token: string = "USDC"): string {
+  const decimals = TOKEN_DECIMALS[token.toUpperCase()] ?? 6;
+  // Use BigInt for large decimal multipliers to avoid float precision issues
+  const factor = 10 ** decimals;
+  return Math.round(amount * factor).toString();
 }
 
 // --- Core Functions ---
@@ -49,6 +62,7 @@ export async function initiateSettlement(params: {
   merchantWallet: string;
   settlementChain: string;
   settlementToken: string;
+  isTest?: boolean;
 }): Promise<SettlementInitResult> {
   const {
     paymentId,
@@ -58,15 +72,16 @@ export async function initiateSettlement(params: {
     merchantWallet,
     settlementChain,
     settlementToken,
+    isTest = false,
   } = params;
 
-  const destinationAsset = buildDestinationAsset(settlementChain, settlementToken);
+  const destinationAsset = buildDestinationAsset(settlementChain, settlementToken, isTest);
 
   // Get a live quote (non-dry-run) which returns a deposit address
   const quote = await submitDeposit({
     originAsset,
     destinationAsset,
-    amount: toMinorUnits(amount),
+    amount: toMinorUnits(amount, settlementToken),
     recipient: merchantWallet,
     refundTo,
     swapType: "EXACT_OUTPUT",

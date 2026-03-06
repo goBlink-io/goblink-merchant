@@ -9,7 +9,7 @@ import { sendCustomerReceiptEmail } from "@/lib/email/customer-receipt";
 import { checkAndAwardMilestones, MILESTONE_LABELS } from "@/lib/milestones";
 import { timingSafeCompare } from "@/lib/timing-safe";
 
-const FEE_RATE = 0.01; // 1%
+const FEE_BPS = 100; // 1% = 100 basis points
 
 // GET /api/cron/settle-payments — Vercel Cron endpoint.
 // Settles processing payments via 1Click and expires stale pending payments.
@@ -55,9 +55,12 @@ export async function GET(request: NextRequest) {
             | string
             | undefined;
 
-        const amount = Number(payment.amount);
-        const feeAmount = Math.round(amount * FEE_RATE * 100) / 100;
-        const netAmount = Math.round((amount - feeAmount) * 100) / 100;
+        // Integer arithmetic: work in cents to avoid float precision issues (M8)
+        const amountCents = Math.round(Number(payment.amount) * 100);
+        const feeCents = Math.floor(amountCents * FEE_BPS / 10000);
+        const netCents = amountCents - feeCents;
+        const feeAmount = feeCents / 100;
+        const netAmount = netCents / 100;
 
         const { error: updateErr } = await supabase
           .from("payments")
@@ -102,7 +105,7 @@ export async function GET(request: NextRequest) {
           `/dashboard/payments/${payment.id}`
         );
 
-        logAudit({
+        await logAudit({
           merchantId: payment.merchant_id,
           actor: "system",
           action: "payment.confirmed",
@@ -271,7 +274,7 @@ export async function GET(request: NextRequest) {
           `/dashboard/payments/${payment.id}`
         );
 
-        logAudit({
+        await logAudit({
           merchantId: payment.merchant_id,
           actor: "system",
           action: "payment.failed",
@@ -305,7 +308,7 @@ export async function GET(request: NextRequest) {
           },
         });
 
-        logAudit({
+        await logAudit({
           merchantId: payment.merchant_id,
           actor: "system",
           action: "payment.refunded",

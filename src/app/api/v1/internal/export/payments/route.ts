@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
   }
 
   const dc = merchant.display_currency || "USD";
-  const rate = await getExchangeRate(dc);
+  const rate = (await getExchangeRate(dc)) ?? 1;
   const showDc = dc !== "USD";
 
   if (format === "json") {

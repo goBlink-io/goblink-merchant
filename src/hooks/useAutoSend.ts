@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useSendTransaction, useWriteContract, useAccount } from "wagmi";
+import { useSendTransaction, useWriteContract, useAccount, usePublicClient } from "wagmi";
 import { parseUnits, erc20Abi, type Address } from "viem";
 
 interface Token {
@@ -50,6 +50,7 @@ export function useAutoSend({ paymentId, chainId, customerEmail, customFields, o
   const [txHash, setTxHash] = useState<string | null>(null);
 
   const { address: walletAddress } = useAccount();
+  const publicClient = usePublicClient();
 
   const { sendTransactionAsync } = useSendTransaction();
   const { writeContractAsync } = useWriteContract();
@@ -94,6 +95,14 @@ export function useAutoSend({ paymentId, chainId, customerEmail, customFields, o
 
         setTxHash(hash);
         setStatus("confirming");
+
+        // Wait for on-chain confirmation before marking complete (M18)
+        if (publicClient) {
+          await publicClient.waitForTransactionReceipt({
+            hash: hash as `0x${string}`,
+            confirmations: 1,
+          });
+        }
 
         // Call the complete endpoint with the real tx hash
         const completeRes = await fetch(`/api/checkout/${paymentId}/complete`, {
