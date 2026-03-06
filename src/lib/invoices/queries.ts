@@ -64,8 +64,9 @@ export async function getInvoices(
   }
 
   if (filters.search) {
+    const term = `%${filters.search.replace(/[,.*()]/g, "")}%`;
     query = query.or(
-      `invoice_number.ilike.%${filters.search}%,recipient_name.ilike.%${filters.search}%,recipient_email.ilike.%${filters.search}%`
+      `invoice_number.ilike.${term},recipient_name.ilike.${term},recipient_email.ilike.${term}`
     );
   }
 

@@ -45,8 +45,11 @@ export default async function PaymentsPage({
 
   // Search by order ID or tx hash
   if (params.search) {
+    const sanitized = params.search.replace(/[,.*()]/g, "");
+    const term = `%${sanitized}%`;
+    const uuidMatch = isUUID(sanitized) ? sanitized : "00000000-0000-0000-0000-000000000000";
     query = query.or(
-      `external_order_id.ilike.%${params.search}%,send_tx_hash.ilike.%${params.search}%,fulfillment_tx_hash.ilike.%${params.search}%,id.eq.${isUUID(params.search) ? params.search : "00000000-0000-0000-0000-000000000000"}`
+      `external_order_id.ilike.${term},send_tx_hash.ilike.${term},fulfillment_tx_hash.ilike.${term},id.eq.${uuidMatch}`
     );
   }
 
