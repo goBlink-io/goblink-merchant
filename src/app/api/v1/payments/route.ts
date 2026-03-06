@@ -64,7 +64,11 @@ export async function POST(request: NextRequest) {
   const paymentMetadata: Record<string, unknown> = { ...(metadata || {}) };
 
   if (requestedCurrency !== "USD") {
-    amountUsd = await convertToUsd(Number(amount), requestedCurrency);
+    try {
+      amountUsd = await convertToUsd(Number(amount), requestedCurrency);
+    } catch {
+      return apiError(`Exchange rate unavailable for ${requestedCurrency}. Try again later.`, 503);
+    }
     amountUsd = Math.round(amountUsd * 100) / 100; // Round to 2 decimal places
     paymentMetadata.original_currency = requestedCurrency;
     paymentMetadata.original_amount = Number(amount);
