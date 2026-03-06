@@ -4,6 +4,7 @@ import { validateApiKey, isApiForbidden } from "@/lib/api-auth";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
+import { validateWebhookUrl } from "@/lib/webhooks";
 
 // POST /api/v1/webhooks — Register a webhook endpoint
 export async function POST(request: NextRequest) {
@@ -31,14 +32,11 @@ export async function POST(request: NextRequest) {
     return apiError("url is required", 400);
   }
 
-  // Validate URL
+  // Validate URL (SSRF protection: checks HTTPS + resolves hostname to block private IPs)
   try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") {
-      return apiError("Webhook URL must use HTTPS", 400);
-    }
-  } catch {
-    return apiError("Invalid URL format", 400);
+    await validateWebhookUrl(url);
+  } catch (err) {
+    return apiError(err instanceof Error ? err.message : "Invalid webhook URL", 400);
   }
 
   const validEvents = [
