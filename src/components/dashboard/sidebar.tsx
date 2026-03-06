@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
 import {
   LayoutDashboard,
   CreditCard,
@@ -15,32 +16,85 @@ import {
   LogOut,
   Zap,
   ChevronLeft,
+  ChevronDown,
   Menu,
+  LifeBuoy,
+  FlaskConical,
+  Plug,
+  FileText,
+  Store,
+  Activity,
+  Download,
+  RotateCcw,
+  Wallet,
+  Landmark,
+  Users,
+  Code,
 } from "lucide-react";
-import { useState } from "react";
+import { useTestModeContext } from "@/contexts/TestModeContext";
+import { useState, useEffect, useCallback } from "react";
 
-const navItems = [
+interface NavItem {
+  title: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  comingSoon?: boolean;
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const STORAGE_KEY = "sidebar-groups";
+
+const navGroups: NavGroup[] = [
   {
-    title: "Overview",
-    href: "/dashboard",
-    icon: LayoutDashboard,
+    label: "Main",
+    items: [
+      { title: "Overview", href: "/dashboard", icon: LayoutDashboard },
+    ],
   },
   {
-    title: "Payments",
-    href: "/dashboard/payments",
-    icon: CreditCard,
+    label: "Payments",
+    items: [
+      { title: "Payments", href: "/dashboard/payments", icon: CreditCard },
+      { title: "Refunds", href: "/dashboard/refunds", icon: RotateCcw },
+      { title: "Payment Links", href: "/dashboard/links", icon: Link2 },
+      { title: "Invoices", href: "/dashboard/invoices", icon: FileText },
+    ],
   },
   {
-    title: "Payment Links",
-    href: "/dashboard/links",
-    icon: Link2,
+    label: "Tools",
+    items: [
+      { title: "POS", href: "/dashboard/pos", icon: Store },
+      { title: "Buttons", href: "/dashboard/buttons", icon: Code },
+      { title: "Webhooks", href: "/dashboard/webhooks", icon: Plug },
+      { title: "Activity", href: "/dashboard/activity", icon: Activity },
+      { title: "Export", href: "/dashboard/export", icon: Download },
+    ],
   },
   {
-    title: "Settings",
-    href: "/dashboard/settings",
-    icon: Settings,
+    label: "Account",
+    items: [
+      { title: "Cash Out", href: "/dashboard/offramp", icon: Landmark, comingSoon: true },
+      { title: "Settlement", href: "/dashboard/settings/settlement", icon: Wallet },
+      { title: "Settings", href: "/dashboard/settings", icon: Settings },
+      { title: "Support", href: "/dashboard/support", icon: LifeBuoy },
+      { title: "Referrals", href: "/dashboard/referrals", icon: Users },
+    ],
   },
 ];
+
+function loadCollapsedGroups(): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -48,6 +102,38 @@ export function Sidebar() {
   const supabase = createClient();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [unresolvedCount, setUnresolvedCount] = useState(0);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const { isTestMode, toggleTestMode } = useTestModeContext();
+
+  useEffect(() => {
+    setCollapsedGroups(loadCollapsedGroups());
+  }, []);
+
+  const toggleGroup = useCallback((label: string) => {
+    setCollapsedGroups((prev) => {
+      const next = { ...prev, [label]: !prev[label] };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/v1/internal/tickets")
+      .then((res) => res.ok ? res.json() : null)
+      .then((tickets) => {
+        if (Array.isArray(tickets)) {
+          setUnresolvedCount(
+            tickets.filter((t: { status: string }) =>
+              ["open", "in_progress", "waiting_on_merchant"].includes(t.status)
+            ).length
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -112,30 +198,106 @@ export function Sidebar() {
 
           {/* Nav */}
           <ScrollArea className="flex-1 py-4">
-            <nav className="space-y-1 px-2">
-              {navItems.map((item) => {
-                const isActive =
-                  pathname === item.href ||
-                  (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            <nav className="space-y-3 px-2">
+              {navGroups.map((group) => {
+                const isGroupCollapsed = !!collapsedGroups[group.label];
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setMobileOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                      isActive
-                        ? "bg-blue-600/10 text-blue-400"
-                        : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                  <div key={group.label}>
+                    {/* Group header — hidden in icon-only mode */}
+                    {!collapsed && (
+                      <button
+                        onClick={() => toggleGroup(group.label)}
+                        className="flex w-full items-center justify-between px-3 pb-1 pt-2 text-xs font-medium uppercase tracking-wider text-zinc-500 hover:text-zinc-400 transition-colors"
+                      >
+                        {group.label}
+                        <ChevronDown
+                          className={cn(
+                            "h-3 w-3 transition-transform",
+                            isGroupCollapsed && "-rotate-90"
+                          )}
+                        />
+                      </button>
                     )}
-                  >
-                    <item.icon className="h-5 w-5 shrink-0" />
-                    {!collapsed && <span>{item.title}</span>}
-                  </Link>
+                    {/* Group items */}
+                    {(!isGroupCollapsed || collapsed) && (
+                      <div className="space-y-0.5">
+                        {group.items.map((item) => {
+                          const isActive =
+                            pathname === item.href ||
+                            (item.href !== "/dashboard" && pathname.startsWith(item.href));
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={() => setMobileOpen(false)}
+                              className={cn(
+                                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                                isActive
+                                  ? "bg-blue-600/10 text-blue-400"
+                                  : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                              )}
+                            >
+                              <item.icon className="h-5 w-5 shrink-0" />
+                              {!collapsed && (
+                                <span className="flex-1 flex items-center justify-between">
+                                  {item.title}
+                                  {item.comingSoon && (
+                                    <Badge className="bg-zinc-700/50 text-zinc-500 border-zinc-600/30 text-[10px] px-1.5 py-0 ml-auto">
+                                      Soon
+                                    </Badge>
+                                  )}
+                                  {item.title === "Support" && unresolvedCount > 0 && (
+                                    <Badge className="bg-blue-600/20 text-blue-400 border-blue-500/30 text-[10px] px-1.5 py-0 ml-auto">
+                                      {unresolvedCount}
+                                    </Badge>
+                                  )}
+                                </span>
+                              )}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </nav>
           </ScrollArea>
+
+          <Separator />
+
+          {/* Test/Live toggle */}
+          <div className="px-3 py-3">
+            <button
+              onClick={toggleTestMode}
+              className={cn(
+                "w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                isTestMode
+                  ? "bg-amber-500/10 text-amber-400 border border-amber-500/30"
+                  : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+              )}
+            >
+              <FlaskConical className="h-5 w-5 shrink-0" />
+              {!collapsed && (
+                <span className="flex-1 flex items-center justify-between">
+                  {isTestMode ? "Test Mode" : "Live Mode"}
+                  <span
+                    className={cn(
+                      "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                      isTestMode ? "bg-amber-500" : "bg-zinc-700"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform",
+                        isTestMode ? "translate-x-4" : "translate-x-1"
+                      )}
+                    />
+                  </span>
+                </span>
+              )}
+            </button>
+          </div>
 
           <Separator />
 

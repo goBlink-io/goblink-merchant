@@ -12,7 +12,7 @@ export async function OPTIONS(request: NextRequest) {
 // GET /api/checkout/tokens — Public. Proxy to 1Click getTokens().
 export async function GET(request: NextRequest) {
   // Rate limit
-  const rl = await checkRateLimit(request, "checkout-tokens");
+  const rl = await checkRateLimit(request, "checkout-tokens", undefined, true);
   if (!rl.allowed) return withCors(request, rl.response!);
 
   try {

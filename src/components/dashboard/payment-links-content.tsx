@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { haptic } from "@/lib/haptics";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency, formatDate, getStatusColor } from "@/lib/utils";
+import { SUPPORTED_CURRENCIES } from "@/lib/forex";
 import { SharePaymentDialog } from "@/components/dashboard/share-payment-dialog";
 import {
   Plus,
@@ -66,6 +68,7 @@ export function PaymentLinksContent({
 
   // Create form state
   const [amount, setAmount] = useState("");
+  const [linkCurrency, setLinkCurrency] = useState(currency);
   const [memo, setMemo] = useState("");
   const [expiresInHours, setExpiresInHours] = useState("24");
 
@@ -107,7 +110,7 @@ export function PaymentLinksContent({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: Number(amount),
-          currency,
+          currency: linkCurrency,
           memo: memo || undefined,
           expiresInHours: Number(expiresInHours),
         }),
@@ -127,6 +130,7 @@ export function PaymentLinksContent({
 
   function handleCopy(url: string, id: string) {
     navigator.clipboard.writeText(url);
+    haptic("tap");
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   }
@@ -284,18 +288,37 @@ export function PaymentLinksContent({
           </DialogHeader>
 
           <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium text-zinc-300 mb-1.5 block">
-                Amount ({currency})
-              </label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                placeholder="0.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-sm font-medium text-zinc-300 mb-1.5 block">
+                  Amount
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0.01"
+                  placeholder="0.00"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-zinc-300 mb-1.5 block">
+                  Currency
+                </label>
+                <Select value={linkCurrency} onValueChange={setLinkCurrency}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(SUPPORTED_CURRENCIES).map(([code, info]) => (
+                      <SelectItem key={code} value={code}>
+                        {info.symbol} {code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div>
               <label className="text-sm font-medium text-zinc-300 mb-1.5 block">

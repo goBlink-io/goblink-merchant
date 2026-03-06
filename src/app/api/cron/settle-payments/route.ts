@@ -4,6 +4,10 @@ import { getExecutionStatus } from "@/lib/oneclick";
 import { dispatchWebhooks } from "@/lib/webhooks";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
+import { insertNotification } from "@/lib/notifications";
+import { sendCustomerReceiptEmail } from "@/lib/email/customer-receipt";
+import { checkAndAwardMilestones, MILESTONE_LABELS } from "@/lib/milestones";
+import { timingSafeCompare } from "@/lib/timing-safe";
 
 const FEE_RATE = 0.01; // 1%
 
@@ -18,7 +22,7 @@ export async function GET(request: NextRequest) {
     return apiError("CRON_SECRET not configured", 500);
   }
 
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!authHeader || !timingSafeCompare(authHeader, `Bearer ${cronSecret}`)) {
     return apiError("Unauthorized", 401);
   }
 
@@ -90,6 +94,14 @@ export async function GET(request: NextRequest) {
           },
         });
 
+        insertNotification(
+          payment.merchant_id,
+          "payment_received",
+          "Payment received",
+          `${payment.currency} ${payment.amount} payment confirmed.`,
+          `/dashboard/payments/${payment.id}`
+        );
+
         logAudit({
           merchantId: payment.merchant_id,
           actor: "system",
@@ -99,7 +111,133 @@ export async function GET(request: NextRequest) {
           metadata: { feeAmount, netAmount, fulfillmentTxHash: fulfillmentTxHash ?? null },
         });
 
+        // P2-E: Send customer receipt email if customer_email is set
+        if (payment.customer_email) {
+          sendCustomerReceiptEmail(payment, fulfillmentTxHash ?? null).catch((err) => {
+            console.error(`[settle-payments] Failed to send customer receipt for ${payment.id}:`, err);
+          });
+        }
+
         results.settled++;
+
+        // --- First-payment celebration check ---
+        const { data: merchant } = await supabase
+          .from("merchants")
+          .select("first_payment_celebrated")
+          .eq("id", payment.merchant_id)
+          .single();
+
+        if (merchant && !merchant.first_payment_celebrated) {
+          await supabase
+            .from("merchants")
+            .update({ first_payment_celebrated: true })
+            .eq("id", payment.merchant_id);
+
+          insertNotification(
+            payment.merchant_id,
+            "first_payment",
+            "\u{1F389} Your first payment just landed!",
+            "Your first crypto payment is confirmed. Welcome to the future of payments.",
+            `/dashboard/payments/${payment.id}`
+          );
+
+          // --- Referral activation: notify referrer when referred merchant makes first payment ---
+          try {
+            const { data: referral } = await supabase
+              .from("merchant_referrals")
+              .select("id, referrer_id")
+              .eq("referred_id", payment.merchant_id)
+              .eq("status", "pending")
+              .single();
+
+            if (referral) {
+              await supabase
+                .from("merchant_referrals")
+                .update({ status: "active", activated_at: new Date().toISOString() })
+                .eq("id", referral.id);
+
+              insertNotification(
+                referral.referrer_id,
+                "referral",
+                "Referral activated!",
+                "A merchant you referred just made their first payment. You earned a fee waiver!",
+                "/dashboard/referrals"
+              );
+            }
+          } catch (refErr) {
+            console.error(
+              `[settle-payments] Referral check failed for ${payment.merchant_id}:`,
+              refErr instanceof Error ? refErr.message : refErr
+            );
+          }
+        }
+
+        // --- Milestone check ---
+        try {
+          const todayStart = new Date();
+          todayStart.setUTCHours(0, 0, 0, 0);
+
+          const [confirmedCount, todayPayments, merchantData] = await Promise.all([
+            supabase
+              .from("payments")
+              .select("id", { count: "exact", head: true })
+              .eq("merchant_id", payment.merchant_id)
+              .eq("status", "confirmed"),
+            supabase
+              .from("payments")
+              .select("net_amount")
+              .eq("merchant_id", payment.merchant_id)
+              .eq("status", "confirmed")
+              .gte("confirmed_at", todayStart.toISOString()),
+            supabase
+              .from("merchants")
+              .select("created_at")
+              .eq("id", payment.merchant_id)
+              .single(),
+          ]);
+
+          const totalPayments = confirmedCount.count ?? 0;
+          const todayRevenue = (todayPayments.data ?? []).reduce(
+            (sum, p) => sum + Number(p.net_amount ?? 0),
+            0
+          );
+
+          // totalRevenue: use totalBalance as proxy (sum of net_amount for confirmed)
+          const { data: revData } = await supabase
+            .from("payments")
+            .select("net_amount")
+            .eq("merchant_id", payment.merchant_id)
+            .eq("status", "confirmed");
+
+          const totalRevenue = (revData ?? []).reduce(
+            (sum, p) => sum + Number(p.net_amount ?? 0),
+            0
+          );
+
+          const newMilestones = await checkAndAwardMilestones(supabase, payment.merchant_id, {
+            totalPayments,
+            todayRevenue,
+            totalRevenue,
+            merchantCreatedAt: merchantData.data?.created_at ?? new Date().toISOString(),
+          });
+
+          for (const key of newMilestones) {
+            const info = MILESTONE_LABELS[key];
+            if (info) {
+              insertNotification(
+                payment.merchant_id,
+                "milestone",
+                info.title,
+                info.body
+              );
+            }
+          }
+        } catch (milestoneErr) {
+          console.error(
+            `[settle-payments] Milestone check failed for ${payment.merchant_id}:`,
+            milestoneErr instanceof Error ? milestoneErr.message : milestoneErr
+          );
+        }
       } else if (status === "FAILED") {
         const { error: updateErr } = await supabase
           .from("payments")
@@ -124,6 +262,14 @@ export async function GET(request: NextRequest) {
             sendTxHash: payment.send_tx_hash,
           },
         });
+
+        insertNotification(
+          payment.merchant_id,
+          "payment_failed",
+          "Payment failed",
+          `${payment.currency} ${payment.amount} payment failed.`,
+          `/dashboard/payments/${payment.id}`
+        );
 
         logAudit({
           merchantId: payment.merchant_id,

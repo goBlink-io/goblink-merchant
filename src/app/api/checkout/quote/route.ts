@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { apiError, apiSuccess } from "@/lib/api-response";
-import { getQuote, submitDeposit } from "@/lib/oneclick";
+import { getQuote } from "@/lib/oneclick";
 import { checkRateLimit, withRateLimitHeaders } from "@/lib/rate-limit";
 import { withCors, handleCorsOptions } from "@/lib/cors";
 
@@ -12,7 +12,7 @@ export async function OPTIONS(request: NextRequest) {
 // POST /api/checkout/quote — Public. Get a swap quote from 1Click.
 export async function POST(request: NextRequest) {
   // Rate limit
-  const rl = await checkRateLimit(request, "checkout-quote");
+  const rl = await checkRateLimit(request, "checkout-quote", undefined, true);
   if (!rl.allowed) return withCors(request, rl.response!);
 
   let body: Record<string, unknown>;
@@ -57,27 +57,17 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const isDry = dryRun !== false;
-    const quote = isDry
-      ? await getQuote({
-          originAsset,
-          destinationAsset,
-          amount,
-          recipient,
-          refundTo,
-          swapType,
-          slippageTolerance,
-          dryRun: true,
-        })
-      : await submitDeposit({
-          originAsset,
-          destinationAsset,
-          amount,
-          recipient,
-          refundTo,
-          swapType,
-          slippageTolerance,
-        });
+    // Always force dry-run on this public endpoint — real deposits require authenticated flows
+    const quote = await getQuote({
+      originAsset,
+      destinationAsset,
+      amount,
+      recipient,
+      refundTo,
+      swapType,
+      slippageTolerance,
+      dryRun: true,
+    });
 
     return withCors(request, withRateLimitHeaders(apiSuccess(quote), "checkout-quote", rl.remaining));
   } catch (err) {

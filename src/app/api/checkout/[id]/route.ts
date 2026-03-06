@@ -17,7 +17,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   // Rate limit
-  const rl = await checkRateLimit(request, "checkout-get");
+  const rl = await checkRateLimit(request, "checkout-get", undefined, true);
   if (!rl.allowed) return withCors(request, rl.response!);
 
   const { id } = await params;
@@ -32,7 +32,7 @@ export async function GET(
   const { data: payment, error } = await supabase
     .from("payments")
     .select(
-      "id, merchant_id, amount, currency, status, external_order_id, deposit_address, return_url, metadata, expires_at, confirmed_at, created_at, send_tx_hash, fulfillment_tx_hash, customer_wallet, customer_chain"
+      "id, merchant_id, amount, currency, status, external_order_id, deposit_address, return_url, metadata, expires_at, confirmed_at, created_at, send_tx_hash, fulfillment_tx_hash, customer_wallet, customer_chain, is_test"
     )
     .eq("id", id)
     .single();
@@ -55,7 +55,7 @@ export async function GET(
   // Fetch merchant info — only needed fields
   const { data: merchant } = await supabase
     .from("merchants")
-    .select("business_name, logo_url, brand_color, wallet_address, settlement_token, settlement_chain")
+    .select("business_name, logo_url, brand_color, wallet_address, settlement_token, settlement_chain, show_powered_badge, custom_checkout_fields")
     .eq("id", payment.merchant_id)
     .single();
 
@@ -76,6 +76,7 @@ export async function GET(
       fulfillmentTxHash: payment.fulfillment_tx_hash,
       customerWallet: payment.customer_wallet,
       customerChain: payment.customer_chain,
+      isTest: payment.is_test,
     },
     merchant: merchant
       ? {
@@ -85,6 +86,8 @@ export async function GET(
           walletAddress: merchant.wallet_address,
           settlementToken: merchant.settlement_token,
           settlementChain: merchant.settlement_chain,
+          showPoweredBadge: merchant.show_powered_badge ?? true,
+          customCheckoutFields: merchant.custom_checkout_fields ?? [],
         }
       : null,
   });

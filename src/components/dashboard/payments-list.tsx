@@ -15,8 +15,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, ChevronLeft, ChevronRight, CreditCard, Share2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { SharePaymentDialog } from "@/components/dashboard/share-payment-dialog";
+import { useTestModeContext } from "@/contexts/TestModeContext";
+import { useRealtimePayments, type RealtimePaymentRecord } from "@/hooks/useRealtimePayments";
 
 interface Payment {
   id: string;
@@ -31,6 +33,7 @@ interface Payment {
   send_tx_hash: string | null;
   payment_url: string | null;
   created_at: string;
+  is_test?: boolean;
 }
 
 interface PaymentsListProps {
@@ -39,8 +42,18 @@ interface PaymentsListProps {
   currentPage: number;
   perPage: number;
   currency: string;
+  displayCurrency: string;
+  exchangeRate: number;
   currentStatus: string;
   currentSearch: string;
+  merchantId: string;
+}
+
+function formatConverted(amountUsd: number, displayCurrency: string, exchangeRate: number): string {
+  if (displayCurrency === "USD" || exchangeRate === 1) {
+    return formatCurrency(amountUsd, "USD");
+  }
+  return formatCurrency(amountUsd * exchangeRate, displayCurrency);
 }
 
 const statusOptions = [
@@ -59,13 +72,112 @@ export function PaymentsList({
   currentPage,
   perPage,
   currency,
+  displayCurrency,
+  exchangeRate,
   currentStatus,
   currentSearch,
+  merchantId,
 }: PaymentsListProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [search, setSearch] = useState(currentSearch);
   const [sharePayment, setSharePayment] = useState<Payment | null>(null);
+  const { isTestMode } = useTestModeContext();
+  const [livePayments, setLivePayments] = useState<Payment[]>(payments);
+  const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
+  const highlightTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // Sync server-rendered payments when props change (pagination, filters)
+  useEffect(() => {
+    setLivePayments(payments);
+  }, [payments]);
+
+  const handleInsert = useCallback(
+    (record: RealtimePaymentRecord) => {
+      if (Boolean(record.is_test) !== isTestMode) return;
+      // Only prepend on page 1 and if status filter matches
+      if (currentPage !== 1) return;
+      if (currentStatus !== "all" && record.status !== currentStatus) return;
+
+      const newPayment: Payment = {
+        id: record.id,
+        external_order_id: record.external_order_id ?? null,
+        amount: Number(record.amount),
+        currency: record.currency ?? "USD",
+        crypto_amount: record.crypto_amount ?? null,
+        crypto_token: record.crypto_token ?? null,
+        crypto_chain: record.crypto_chain ?? null,
+        status: record.status ?? "pending",
+        customer_wallet: record.customer_wallet ?? null,
+        send_tx_hash: record.send_tx_hash ?? null,
+        payment_url: record.payment_url ?? null,
+        created_at: record.created_at ?? new Date().toISOString(),
+        is_test: Boolean(record.is_test),
+      };
+
+      setLivePayments((prev) => [newPayment, ...prev]);
+
+      // Highlight the new row briefly
+      setHighlightedIds((prev) => new Set(prev).add(record.id));
+      const timer = setTimeout(() => {
+        setHighlightedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(record.id);
+          return next;
+        });
+        highlightTimers.current.delete(record.id);
+      }, 2000);
+      highlightTimers.current.set(record.id, timer);
+    },
+    [isTestMode, currentPage, currentStatus]
+  );
+
+  const handleUpdate = useCallback(
+    (record: RealtimePaymentRecord) => {
+      setLivePayments((prev) =>
+        prev.map((p) =>
+          p.id === record.id
+            ? {
+                ...p,
+                status: record.status ?? p.status,
+                crypto_amount: record.crypto_amount ?? p.crypto_amount,
+                crypto_token: record.crypto_token ?? p.crypto_token,
+                crypto_chain: record.crypto_chain ?? p.crypto_chain,
+                customer_wallet: record.customer_wallet ?? p.customer_wallet,
+                send_tx_hash: record.send_tx_hash ?? p.send_tx_hash,
+                payment_url: record.payment_url ?? p.payment_url,
+              }
+            : p
+        )
+      );
+    },
+    []
+  );
+
+  useRealtimePayments(merchantId, { onInsert: handleInsert, onUpdate: handleUpdate });
+
+  // Clean up highlight timers on unmount
+  useEffect(() => {
+    const timers = highlightTimers.current;
+    return () => {
+      timers.forEach((t) => clearTimeout(t));
+    };
+  }, []);
+
+  // Sync test mode context with URL param
+  useEffect(() => {
+    const currentIsTest = searchParams.get("is_test") === "true";
+    if (currentIsTest !== isTestMode) {
+      const params = new URLSearchParams(searchParams.toString());
+      if (isTestMode) {
+        params.set("is_test", "true");
+      } else {
+        params.delete("is_test");
+      }
+      params.delete("page");
+      router.push(`/dashboard/payments?${params.toString()}`);
+    }
+  }, [isTestMode, searchParams, router]);
 
   const totalPages = Math.ceil(totalCount / perPage);
 
@@ -123,7 +235,7 @@ export function PaymentsList({
       {/* Table */}
       <Card>
         <CardContent className="p-0">
-          {payments.length === 0 ? (
+          {livePayments.length === 0 ? (
             <div className="text-center py-16">
               <CreditCard className="h-12 w-12 text-zinc-700 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-zinc-300">No payments found</h3>
@@ -146,10 +258,14 @@ export function PaymentsList({
               </div>
 
               {/* Rows */}
-              {payments.map((payment) => (
+              {livePayments.map((payment) => (
                 <div
                   key={payment.id}
-                  className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-6 py-4 border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors items-center"
+                  className={`grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-6 py-4 border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-all duration-700 items-center ${
+                    highlightedIds.has(payment.id)
+                      ? "ring-1 ring-green-400/60 bg-green-400/5"
+                      : ""
+                  }`}
                 >
                   <Link
                     href={`/dashboard/payments/${payment.id}`}
@@ -164,8 +280,13 @@ export function PaymentsList({
                   </Link>
                   <Link href={`/dashboard/payments/${payment.id}`} className="col-span-2">
                     <span className="text-sm font-medium text-white">
-                      {formatCurrency(Number(payment.amount), payment.currency)}
+                      {formatConverted(Number(payment.amount), displayCurrency, exchangeRate)}
                     </span>
+                    {displayCurrency !== "USD" && (
+                      <span className="text-xs text-zinc-500 block">
+                        {formatCurrency(Number(payment.amount), "USD")}
+                      </span>
+                    )}
                   </Link>
                   <Link href={`/dashboard/payments/${payment.id}`} className="col-span-2">
                     {payment.crypto_amount ? (
@@ -176,7 +297,12 @@ export function PaymentsList({
                       <span className="text-sm text-zinc-600">--</span>
                     )}
                   </Link>
-                  <div className="col-span-2">
+                  <div className="col-span-2 flex items-center gap-1.5">
+                    {payment.is_test && (
+                      <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-[10px]" variant="outline">
+                        Test
+                      </Badge>
+                    )}
                     <Badge className={getStatusColor(payment.status)} variant="outline">
                       {payment.status}
                     </Badge>

@@ -1,15 +1,24 @@
 import { NextRequest } from "next/server";
-import { validateApiKey } from "@/lib/api-auth";
+import { validateApiKey, isApiForbidden } from "@/lib/api-auth";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { dispatchWebhooks } from "@/lib/webhooks";
+import { convertToUsd, getSupportedCurrencies } from "@/lib/forex";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // POST /api/v1/payments — Create a payment
 export async function POST(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for"));
+  if (isApiForbidden(auth)) {
+    return apiError("IP address not allowed for this API key", 403);
+  }
   if (!auth) {
     return apiError("Invalid or missing API key", 401);
   }
+
+  // Rate limit by API key ID (fail-closed for payment creation)
+  const rl = await checkRateLimit(request, "api-create-payment", auth.keyId);
+  if (!rl.allowed) return rl.response!;
 
   let body: Record<string, unknown>;
   try {
@@ -44,23 +53,41 @@ export async function POST(request: NextRequest) {
     return apiError("Merchant not found", 404);
   }
 
+  // Handle multi-currency: if currency is not USD, convert to USD for internal storage
+  const requestedCurrency = (currency || "USD").toUpperCase();
+  const supportedCurrencies = getSupportedCurrencies();
+  if (requestedCurrency !== "USD" && !supportedCurrencies.includes(requestedCurrency)) {
+    return apiError(`Unsupported currency: ${requestedCurrency}. Supported: ${supportedCurrencies.join(", ")}`, 400);
+  }
+
+  let amountUsd = Number(amount);
+  const paymentMetadata: Record<string, unknown> = { ...(metadata || {}) };
+
+  if (requestedCurrency !== "USD") {
+    amountUsd = await convertToUsd(Number(amount), requestedCurrency);
+    amountUsd = Math.round(amountUsd * 100) / 100; // Round to 2 decimal places
+    paymentMetadata.original_currency = requestedCurrency;
+    paymentMetadata.original_amount = Number(amount);
+  }
+
   const expiresAt = expiresInMinutes
     ? new Date(Date.now() + expiresInMinutes * 60 * 1000).toISOString()
     : new Date(Date.now() + 60 * 60 * 1000).toISOString(); // Default 1 hour
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-  // Insert payment first, then update with payment_url containing the generated ID
+  // Insert payment — amount is always in USD internally
   const paymentData = {
     merchant_id: auth.merchantId,
-    amount: Number(amount),
-    currency: (currency || merchant.currency || "USD").toUpperCase(),
+    amount: amountUsd,
+    currency: "USD",
     external_order_id: orderId || null,
     return_url: returnUrl || null,
-    metadata: metadata || {},
+    metadata: paymentMetadata,
     deposit_address: merchant.wallet_address,
     status: "pending" as const,
     expires_at: expiresAt,
+    is_test: auth.isTest,
   };
 
   const { data: inserted, error: insertError } = await supabase
@@ -97,6 +124,12 @@ export async function POST(request: NextRequest) {
       currency: payment.currency,
       orderId: payment.external_order_id,
       status: payment.status,
+      ...(requestedCurrency !== "USD"
+        ? {
+            originalAmount: Number(amount),
+            originalCurrency: requestedCurrency,
+          }
+        : {}),
     },
   });
 
@@ -111,6 +144,13 @@ export async function POST(request: NextRequest) {
       orderId: payment.external_order_id,
       expiresAt: payment.expires_at,
       createdAt: payment.created_at,
+      isTest: payment.is_test,
+      ...(requestedCurrency !== "USD"
+        ? {
+            originalAmount: Number(amount),
+            originalCurrency: requestedCurrency,
+          }
+        : {}),
     },
     201
   );
@@ -118,7 +158,10 @@ export async function POST(request: NextRequest) {
 
 // GET /api/v1/payments — List payments
 export async function GET(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for"));
+  if (isApiForbidden(auth)) {
+    return apiError("IP address not allowed for this API key", 403);
+  }
   if (!auth) {
     return apiError("Invalid or missing API key", 401);
   }
@@ -126,6 +169,7 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const status = searchParams.get("status");
   const orderId = searchParams.get("orderId");
+  const isTestParam = searchParams.get("is_test");
   const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
   const offset = parseInt(searchParams.get("offset") || "0", 10);
 
@@ -146,6 +190,10 @@ export async function GET(request: NextRequest) {
     query = query.eq("external_order_id", orderId);
   }
 
+  if (isTestParam !== null) {
+    query = query.eq("is_test", isTestParam === "true");
+  }
+
   const { data: payments, count, error } = await query;
 
   if (error) {
@@ -163,6 +211,7 @@ export async function GET(request: NextRequest) {
 }
 
 function formatPaymentResponse(p: Record<string, unknown>) {
+  const meta = p.metadata as Record<string, unknown> | null;
   return {
     id: p.id,
     amount: p.amount,
@@ -187,5 +236,12 @@ function formatPaymentResponse(p: Record<string, unknown>) {
     confirmedAt: p.confirmed_at,
     createdAt: p.created_at,
     updatedAt: p.updated_at,
+    isTest: p.is_test,
+    ...(meta?.original_currency
+      ? {
+          originalAmount: meta.original_amount,
+          originalCurrency: meta.original_currency,
+        }
+      : {}),
   };
 }

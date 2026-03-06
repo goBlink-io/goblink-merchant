@@ -15,6 +15,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "goBlink Merchant",
   description: "Non-custodial crypto payment processing. Accept crypto from anyone. Get paid in anything.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
+    apple: "/icon-192.png",
+  },
 };
 
 export default function RootLayout({

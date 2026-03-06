@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { formatCurrency, formatDate, getStatusColor, truncateAddress } from "@/lib/utils";
 import { getExplorerTxUrl } from "@/lib/explorer";
+import { getExchangeRate } from "@/lib/forex";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -10,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { CopyButton } from "@/components/dashboard/copy-button";
 import { PaymentShareSection } from "@/components/dashboard/payment-share-section";
+import { PaymentRefundSection } from "@/components/dashboard/payment-refund-section";
 import {
   ArrowLeft,
   Clock,
@@ -18,8 +20,10 @@ import {
   Loader2,
   CreditCard,
   ExternalLink,
+  ArrowDownToLine,
 } from "lucide-react";
 import Link from "next/link";
+import { SettlementQR } from "@/components/dashboard/settlement-qr";
 
 const statusTimeline = [
   { key: "pending", label: "Created", icon: Clock },
@@ -40,7 +44,7 @@ export default async function PaymentDetailPage({
 
   const { data: merchant } = await supabase
     .from("merchants")
-    .select("id")
+    .select("id, display_currency")
     .eq("user_id", user.id)
     .single();
 
@@ -54,6 +58,20 @@ export default async function PaymentDetailPage({
     .single();
 
   if (!payment) notFound();
+
+  const dc = merchant.display_currency || "USD";
+  const rate = await getExchangeRate(dc);
+  const showDc = dc !== "USD";
+
+  function fmtDc(amountUsd: number): string {
+    if (!showDc) return formatCurrency(amountUsd, "USD");
+    return formatCurrency(amountUsd * rate, dc);
+  }
+
+  function fmtUsdSub(amountUsd: number): string | null {
+    if (!showDc) return null;
+    return formatCurrency(amountUsd, "USD");
+  }
 
   // Fetch refunds for this payment
   const { data: refunds } = await supabase
@@ -83,6 +101,15 @@ export default async function PaymentDetailPage({
 
   return (
     <div className="space-y-6">
+      {/* Test payment banner */}
+      {payment.is_test && (
+        <div className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center">
+          <p className="text-sm font-medium text-amber-400">
+            TEST PAYMENT — This payment was created with a test API key
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/dashboard/payments">
@@ -95,6 +122,11 @@ export default async function PaymentDetailPage({
             <h1 className="text-2xl font-bold text-white">
               {payment.external_order_id || `Payment #${payment.id.slice(0, 8)}`}
             </h1>
+            {payment.is_test && (
+              <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30" variant="outline">
+                Test
+              </Badge>
+            )}
             <Badge className={getStatusColor(payment.status)} variant="outline">
               {payment.status}
             </Badge>
@@ -118,18 +150,22 @@ export default async function PaymentDetailPage({
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <DetailItem
-                  label="Amount"
-                  value={formatCurrency(Number(payment.amount), payment.currency)}
-                />
-                <DetailItem
-                  label="Net Amount"
-                  value={
-                    payment.net_amount
-                      ? formatCurrency(Number(payment.net_amount), payment.currency)
-                      : "--"
-                  }
-                />
+                <div>
+                  <p className="text-xs text-zinc-500 mb-0.5">Amount</p>
+                  <p className="text-sm text-white">{fmtDc(Number(payment.amount))}</p>
+                  {fmtUsdSub(Number(payment.amount)) && (
+                    <p className="text-xs text-zinc-500">{fmtUsdSub(Number(payment.amount))}</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 mb-0.5">Net Amount</p>
+                  <p className="text-sm text-white">
+                    {payment.net_amount ? fmtDc(Number(payment.net_amount)) : "--"}
+                  </p>
+                  {payment.net_amount && fmtUsdSub(Number(payment.net_amount)) && (
+                    <p className="text-xs text-zinc-500">{fmtUsdSub(Number(payment.net_amount))}</p>
+                  )}
+                </div>
                 <DetailItem
                   label="Fee"
                   value={
@@ -138,7 +174,7 @@ export default async function PaymentDetailPage({
                       : "--"
                   }
                 />
-                <DetailItem label="Currency" value={payment.currency} />
+                <DetailItem label="Currency" value={showDc ? `${dc} (internal: ${payment.currency})` : payment.currency} />
               </div>
 
               {payment.crypto_amount && (
@@ -210,37 +246,15 @@ export default async function PaymentDetailPage({
             </Card>
           )}
 
-          {/* Refunds */}
-          {refunds && refunds.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Refunds</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {refunds.map((refund) => (
-                    <div
-                      key={refund.id}
-                      className="flex items-center justify-between py-2 border-b border-zinc-800/50 last:border-0"
-                    >
-                      <div>
-                        <p className="text-sm text-white">
-                          {formatCurrency(Number(refund.amount), refund.currency)}
-                        </p>
-                        <p className="text-xs text-zinc-500">
-                          {formatDate(refund.created_at)}
-                          {refund.reason && ` — ${refund.reason}`}
-                        </p>
-                      </div>
-                      <Badge className={getStatusColor(refund.status)} variant="outline">
-                        {refund.status}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Refund Action + History */}
+          <PaymentRefundSection
+            paymentId={payment.id}
+            paymentStatus={payment.status}
+            paymentAmount={Number(payment.amount)}
+            currency={payment.currency}
+            initialRefunds={refunds ?? []}
+            isTest={!!payment.is_test}
+          />
 
           {/* Metadata */}
           {payment.metadata && Object.keys(payment.metadata).length > 0 && (
@@ -357,6 +371,75 @@ export default async function PaymentDetailPage({
               </div>
             </CardContent>
           </Card>
+
+          {/* Settlement Status */}
+          {payment.settlement_status && payment.settlement_status !== "none" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ArrowDownToLine className="h-4 w-4 text-zinc-400" />
+                  Settlement
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <p className="text-xs text-zinc-500 mb-0.5">Status</p>
+                  <Badge
+                    className={
+                      payment.settlement_status === "settled"
+                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                        : payment.settlement_status === "failed"
+                          ? "bg-red-500/10 text-red-400 border-red-500/30"
+                          : "bg-blue-500/10 text-blue-400 border-blue-500/30"
+                    }
+                    variant="outline"
+                  >
+                    {payment.settlement_status}
+                  </Badge>
+                </div>
+                {payment.settlement_chain && (
+                  <DetailItem
+                    label="Settlement Chain"
+                    value={payment.settlement_chain}
+                  />
+                )}
+                {payment.settlement_token && (
+                  <DetailItem
+                    label="Settlement Token"
+                    value={payment.settlement_token}
+                  />
+                )}
+                {payment.intent_id && (
+                  <DetailItem
+                    label="Intent ID"
+                    value={truncateAddress(payment.intent_id, 10)}
+                    copyValue={payment.intent_id}
+                    isHash
+                  />
+                )}
+                {payment.settled_at && (
+                  <DetailItem
+                    label="Settled At"
+                    value={formatDate(payment.settled_at)}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Deposit Address QR Code */}
+          {payment.deposit_address &&
+            (payment.status === "pending" || payment.status === "processing" ||
+             payment.settlement_status === "pending") && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Deposit QR</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <SettlementQR depositAddress={payment.deposit_address} />
+              </CardContent>
+            </Card>
+          )}
 
           {/* Quick Info */}
           <Card>

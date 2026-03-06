@@ -33,19 +33,33 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { Key, Plus, Trash2, Globe, Webhook, Building2, AlertCircle, Play, RotateCw, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { Key, Plus, Trash2, Globe, Webhook, Building2, AlertCircle, Play, RotateCw, ChevronDown, ChevronRight, ChevronUp, Loader2, Bell, Palette, Shield, ListChecks, X } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { MfaSetup } from "@/components/dashboard/mfa-setup";
 import { formatDate } from "@/lib/utils";
+import { SUPPORTED_CURRENCIES } from "@/lib/forex";
+
+interface CustomCheckoutField {
+  label: string;
+  type: "text" | "email" | "textarea" | "select";
+  required: boolean;
+  options?: string[];
+}
 
 interface Merchant {
   id: string;
   business_name: string;
   country: string;
   currency: string;
+  display_currency: string;
   timezone: string;
   wallet_address: string | null;
   settlement_token: string;
   settlement_chain: string;
   brand_color: string;
+  logo_url: string | null;
+  show_powered_badge: boolean;
+  custom_checkout_fields?: CustomCheckoutField[];
 }
 
 interface ApiKey {
@@ -55,6 +69,7 @@ interface ApiKey {
   is_test: boolean;
   last_used_at: string | null;
   created_at: string;
+  allowed_ips: string[];
 }
 
 interface WebhookEndpoint {
@@ -65,28 +80,49 @@ interface WebhookEndpoint {
   created_at: string;
 }
 
+interface NotificationPreferences {
+  payment_received: boolean;
+  payment_failed: boolean;
+  ticket_reply: boolean;
+  withdrawal_complete: boolean;
+  weekly_summary: boolean;
+}
+
 interface SettingsContentProps {
   merchant: Merchant;
   apiKeys: ApiKey[];
   webhooks: WebhookEndpoint[];
+  notificationPreferences: NotificationPreferences;
 }
 
-export function SettingsContent({ merchant, apiKeys, webhooks }: SettingsContentProps) {
+export function SettingsContent({ merchant, apiKeys, webhooks, notificationPreferences }: SettingsContentProps) {
   return (
     <Tabs defaultValue="profile" className="space-y-6">
-      <TabsList>
+      <TabsList className="flex-wrap">
         <TabsTrigger value="profile">Business Profile</TabsTrigger>
+        <TabsTrigger value="branding">Branding</TabsTrigger>
         <TabsTrigger value="payments">Payment Preferences</TabsTrigger>
+        <TabsTrigger value="checkout-fields">Checkout Fields</TabsTrigger>
         <TabsTrigger value="api">API Keys</TabsTrigger>
         <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+        <TabsTrigger value="security">Security</TabsTrigger>
+        <TabsTrigger value="notifications">Notifications</TabsTrigger>
       </TabsList>
 
       <TabsContent value="profile">
         <ProfileSettings merchant={merchant} />
       </TabsContent>
 
+      <TabsContent value="branding">
+        <BrandingSettings merchant={merchant} />
+      </TabsContent>
+
       <TabsContent value="payments">
         <PaymentSettings merchant={merchant} />
+      </TabsContent>
+
+      <TabsContent value="checkout-fields">
+        <CheckoutFieldsSettings merchant={merchant} />
       </TabsContent>
 
       <TabsContent value="api">
@@ -96,6 +132,14 @@ export function SettingsContent({ merchant, apiKeys, webhooks }: SettingsContent
       <TabsContent value="webhooks">
         <WebhookSettings merchantId={merchant.id} webhooks={webhooks} />
       </TabsContent>
+
+      <TabsContent value="security">
+        <MfaSetup />
+      </TabsContent>
+
+      <TabsContent value="notifications">
+        <NotificationSettings merchantId={merchant.id} preferences={notificationPreferences} />
+      </TabsContent>
     </Tabs>
   );
 }
@@ -103,7 +147,7 @@ export function SettingsContent({ merchant, apiKeys, webhooks }: SettingsContent
 function ProfileSettings({ merchant }: { merchant: Merchant }) {
   const [businessName, setBusinessName] = useState(merchant.business_name);
   const [country, setCountry] = useState(merchant.country);
-  const [currency, setCurrency] = useState(merchant.currency);
+  const [displayCurrency, setDisplayCurrency] = useState(merchant.display_currency || "USD");
   const [timezone, setTimezone] = useState(merchant.timezone);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -117,7 +161,7 @@ function ProfileSettings({ merchant }: { merchant: Merchant }) {
       .update({
         business_name: businessName,
         country,
-        currency,
+        display_currency: displayCurrency,
         timezone,
       })
       .eq("id", merchant.id);
@@ -167,20 +211,22 @@ function ProfileSettings({ merchant }: { merchant: Merchant }) {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="currency">Store Currency</Label>
-            <Select value={currency} onValueChange={setCurrency}>
+            <Label htmlFor="displayCurrency">Display Currency</Label>
+            <Select value={displayCurrency} onValueChange={setDisplayCurrency}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="USD">USD — US Dollar</SelectItem>
-                <SelectItem value="CAD">CAD — Canadian Dollar</SelectItem>
-                <SelectItem value="EUR">EUR — Euro</SelectItem>
-                <SelectItem value="GBP">GBP — British Pound</SelectItem>
-                <SelectItem value="AUD">AUD — Australian Dollar</SelectItem>
-                <SelectItem value="JPY">JPY — Japanese Yen</SelectItem>
+                {Object.entries(SUPPORTED_CURRENCIES).map(([code, info]) => (
+                  <SelectItem key={code} value={code}>
+                    {info.symbol} {code} — {info.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            <p className="text-xs text-zinc-500">
+              Display currency for your dashboard. Settlement is always in crypto.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="timezone">Timezone</Label>
@@ -214,6 +260,175 @@ function ProfileSettings({ merchant }: { merchant: Merchant }) {
       </CardContent>
     </Card>
   );
+}
+
+function BrandingSettings({ merchant }: { merchant: Merchant }) {
+  const [logoUrl, setLogoUrl] = useState(merchant.logo_url || "");
+  const [brandColor, setBrandColor] = useState(merchant.brand_color || "#2563EB");
+  const [showPoweredBadge, setShowPoweredBadge] = useState(merchant.show_powered_badge ?? true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
+
+  async function handleSave() {
+    setSaving(true);
+    const { error } = await supabase
+      .from("merchants")
+      .update({
+        logo_url: logoUrl || null,
+        brand_color: brandColor,
+        show_powered_badge: showPoweredBadge,
+      })
+      .eq("id", merchant.id);
+
+    setSaving(false);
+    if (!error) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      router.refresh();
+    }
+  }
+
+  const initials = merchant.business_name.charAt(0).toUpperCase();
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Palette className="h-5 w-5 text-zinc-400" />
+          Checkout Branding
+        </CardTitle>
+        <CardDescription>
+          Customize how your checkout page looks to customers.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Controls */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="logoUrl">Logo URL</Label>
+              <Input
+                id="logoUrl"
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                placeholder="https://example.com/logo.png"
+                type="url"
+              />
+              <p className="text-xs text-zinc-500">
+                Square image recommended (at least 80×80px).
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="brandColor">Brand Color</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  id="brandColor"
+                  value={brandColor}
+                  onChange={(e) => setBrandColor(e.target.value)}
+                  className="h-10 w-14 rounded-lg border border-zinc-700 bg-transparent cursor-pointer"
+                />
+                <Input
+                  value={brandColor}
+                  onChange={(e) => setBrandColor(e.target.value)}
+                  className="font-mono flex-1"
+                  placeholder="#2563EB"
+                />
+              </div>
+              <p className="text-xs text-zinc-500">
+                Used as accent color on your checkout page.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-zinc-800/30 border border-zinc-800">
+              <div>
+                <p className="text-sm font-medium text-white">Show Powered by goBlink on checkout</p>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Display a small goBlink badge on your checkout page. Enabling this reduces your processing fee by 0.05%.
+                </p>
+              </div>
+              <Switch checked={showPoweredBadge} onCheckedChange={setShowPoweredBadge} />
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save Branding"}
+              </Button>
+              {saved && (
+                <span className="text-sm text-emerald-400">Branding saved!</span>
+              )}
+            </div>
+          </div>
+
+          {/* Live preview */}
+          <div className="space-y-2">
+            <Label>Preview</Label>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-6">
+              {/* Merchant header preview */}
+              <div className="flex items-center gap-3 mb-4">
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt="Logo preview"
+                    className="h-10 w-10 rounded-xl object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div
+                    className="h-10 w-10 rounded-xl flex items-center justify-center text-white font-bold text-lg"
+                    style={{ background: brandColor }}
+                  >
+                    {initials}
+                  </div>
+                )}
+                <div>
+                  <p className="text-sm font-semibold text-zinc-100">
+                    {merchant.business_name}
+                  </p>
+                  <p className="text-xs text-zinc-500">is requesting payment</p>
+                </div>
+              </div>
+
+              {/* Card preview */}
+              <div className="rounded-xl bg-zinc-900/80 border border-zinc-800/80 p-4 space-y-3">
+                <p className="text-xl font-bold text-zinc-50 text-center">$25.00</p>
+                <p className="text-xs text-zinc-400 text-center">USD</p>
+                <button
+                  className="w-full py-2.5 rounded-xl text-white text-sm font-medium"
+                  style={{
+                    background: `linear-gradient(135deg, ${brandColor}, ${adjustColor(brandColor, 40)})`,
+                  }}
+                >
+                  Pay $25.00
+                </button>
+              </div>
+
+              {/* Powered by footer */}
+              <div className="flex items-center justify-center gap-1.5 mt-4 text-[10px] text-zinc-600">
+                <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor" />
+                </svg>
+                Powered by goBlink
+              </div>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Shift a hex color hue slightly for gradient effect */
+function adjustColor(hex: string, amount: number): string {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = Math.min(255, ((num >> 16) & 0xff) + amount);
+  const g = Math.min(255, ((num >> 8) & 0xff) + amount);
+  const b = Math.min(255, (num & 0xff) + amount);
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
 }
 
 function PaymentSettings({ merchant }: { merchant: Merchant }) {
@@ -309,6 +524,365 @@ function PaymentSettings({ merchant }: { merchant: Merchant }) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function CheckoutFieldsSettings({ merchant }: { merchant: Merchant }) {
+  const [fields, setFields] = useState<CustomCheckoutField[]>(
+    merchant.custom_checkout_fields ?? []
+  );
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
+
+  function addField() {
+    if (fields.length >= 5) return;
+    setFields([...fields, { label: "", type: "text", required: false }]);
+  }
+
+  function removeField(index: number) {
+    setFields(fields.filter((_, i) => i !== index));
+  }
+
+  function updateField(index: number, updates: Partial<CustomCheckoutField>) {
+    setFields(fields.map((f, i) => (i === index ? { ...f, ...updates } : f)));
+  }
+
+  function moveField(index: number, direction: "up" | "down") {
+    if (direction === "up" && index === 0) return;
+    if (direction === "down" && index === fields.length - 1) return;
+    const newFields = [...fields];
+    const swapIndex = direction === "up" ? index - 1 : index + 1;
+    [newFields[index], newFields[swapIndex]] = [newFields[swapIndex], newFields[index]];
+    setFields(newFields);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const { error } = await supabase
+      .from("merchants")
+      .update({ custom_checkout_fields: fields })
+      .eq("id", merchant.id);
+
+    setSaving(false);
+    if (!error) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      router.refresh();
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <ListChecks className="h-5 w-5 text-zinc-400" />
+                Custom Checkout Fields
+              </CardTitle>
+              <CardDescription>
+                Add custom fields to your checkout page (max 5). Customers fill these before payment.
+              </CardDescription>
+            </div>
+            <Button size="sm" onClick={addField} disabled={fields.length >= 5}>
+              <Plus className="h-4 w-4" />
+              Add Field
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {fields.length === 0 ? (
+            <div className="text-center py-8">
+              <ListChecks className="h-10 w-10 text-zinc-700 mx-auto mb-3" />
+              <p className="text-sm text-zinc-400">No custom fields</p>
+              <p className="text-xs text-zinc-600 mt-1">
+                Add fields like &ldquo;Full Name&rdquo;, &ldquo;Email&rdquo;, or &ldquo;Order Notes&rdquo; to collect info at checkout.
+              </p>
+            </div>
+          ) : (
+            fields.map((field, index) => (
+              <div
+                key={index}
+                className="rounded-lg bg-zinc-800/30 border border-zinc-800 p-4 space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-zinc-500 font-medium">Field {index + 1}</span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-zinc-500"
+                      onClick={() => moveField(index, "up")}
+                      disabled={index === 0}
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-zinc-500"
+                      onClick={() => moveField(index, "down")}
+                      disabled={index === fields.length - 1}
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-zinc-500 hover:text-red-400"
+                      onClick={() => removeField(index)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Label</Label>
+                    <Input
+                      value={field.label}
+                      onChange={(e) => updateField(index, { label: e.target.value })}
+                      placeholder="e.g. Full Name"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Type</Label>
+                    <Select
+                      value={field.type}
+                      onValueChange={(val) =>
+                        updateField(index, {
+                          type: val as CustomCheckoutField["type"],
+                          options: val === "select" ? (field.options?.length ? field.options : ["Option 1"]) : undefined,
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="text">Text</SelectItem>
+                        <SelectItem value="email">Email</SelectItem>
+                        <SelectItem value="textarea">Textarea</SelectItem>
+                        <SelectItem value="select">Dropdown</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end pb-1">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={field.required}
+                        onCheckedChange={(checked) => updateField(index, { required: checked })}
+                      />
+                      <Label className="text-xs text-zinc-400">Required</Label>
+                    </div>
+                  </div>
+                </div>
+                {field.type === "select" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Options (one per line)</Label>
+                    <Textarea
+                      value={(field.options ?? []).join("\n")}
+                      onChange={(e) =>
+                        updateField(index, {
+                          options: e.target.value.split("\n").filter((o) => o.trim()),
+                        })
+                      }
+                      placeholder={"Option 1\nOption 2\nOption 3"}
+                      rows={3}
+                      className="font-mono text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+
+          {fields.length > 0 && (
+            <div className="flex items-center gap-3">
+              <Button onClick={handleSave} disabled={saving}>
+                {saving ? "Saving..." : "Save Fields"}
+              </Button>
+              {saved && (
+                <span className="text-sm text-emerald-400">Fields saved!</span>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Preview */}
+      {fields.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Checkout Preview</CardTitle>
+            <CardDescription>How custom fields will appear on your checkout page.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-6 space-y-4 max-w-md">
+              {fields.map((field, index) => (
+                <div key={index} className="space-y-1.5">
+                  <label className="text-sm text-zinc-300">
+                    {field.label || "Untitled"}
+                    {field.required && <span className="text-red-400 ml-1">*</span>}
+                  </label>
+                  {field.type === "textarea" ? (
+                    <div className="h-16 rounded-lg bg-zinc-800/80 border border-zinc-700" />
+                  ) : field.type === "select" ? (
+                    <div className="h-10 rounded-lg bg-zinc-800/80 border border-zinc-700 px-3 flex items-center text-sm text-zinc-500">
+                      {field.options?.[0] || "Select..."}
+                    </div>
+                  ) : (
+                    <div className="h-10 rounded-lg bg-zinc-800/80 border border-zinc-700" />
+                  )}
+                </div>
+              ))}
+              <button className="w-full py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-medium mt-2">
+                Pay $25.00
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function ApiKeyItem({
+  apiKey: key,
+  merchantId,
+  onDelete,
+}: {
+  apiKey: ApiKey;
+  merchantId: string;
+  onDelete: (id: string) => void;
+}) {
+  const [ips, setIps] = useState<string[]>(key.allowed_ips ?? []);
+  const [newIp, setNewIp] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const router = useRouter();
+
+  async function saveIps(updatedIps: string[]) {
+    setSaving(true);
+    const res = await fetch("/api/v1/internal/api-keys", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyId: key.id, merchantId, allowedIps: updatedIps }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setIps(updatedIps);
+      router.refresh();
+    }
+  }
+
+  function handleAddIp() {
+    const trimmed = newIp.trim();
+    if (!trimmed || ips.includes(trimmed)) return;
+    const updated = [...ips, trimmed];
+    setNewIp("");
+    saveIps(updated);
+  }
+
+  function handleRemoveIp(ip: string) {
+    saveIps(ips.filter((i) => i !== ip));
+  }
+
+  return (
+    <div className="rounded-lg bg-zinc-800/30 border border-zinc-800">
+      <div className="flex items-center justify-between py-3 px-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <Key className="h-4 w-4 text-zinc-500 shrink-0" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <code className="text-sm text-white font-mono">
+                {key.key_prefix}...
+              </code>
+              <Badge variant={key.is_test ? "warning" : "success"}>
+                {key.is_test ? "test" : "live"}
+              </Badge>
+              {ips.length > 0 && (
+                <Badge variant="outline" className="text-xs">
+                  {ips.length} IP{ips.length !== 1 && "s"}
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              {key.label} — Created {formatDate(key.created_at)}
+              {key.last_used_at && ` — Last used ${formatDate(key.last_used_at)}`}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-zinc-500 hover:text-zinc-300"
+            onClick={() => setExpanded(!expanded)}
+            title="IP restrictions"
+          >
+            <Shield className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-zinc-500 hover:text-red-400"
+            onClick={() => onDelete(key.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-zinc-800 pt-3 space-y-3">
+          <div>
+            <p className="text-xs font-medium text-zinc-400 mb-1">IP Allowlist</p>
+            <p className="text-xs text-zinc-600">
+              Restrict this key to specific IP addresses for added security. Leave empty to allow all IPs.
+            </p>
+          </div>
+          {ips.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {ips.map((ip) => (
+                <div
+                  key={ip}
+                  className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1"
+                >
+                  <code className="text-xs text-zinc-300 font-mono">{ip}</code>
+                  <button
+                    onClick={() => handleRemoveIp(ip)}
+                    className="text-zinc-600 hover:text-red-400 transition-colors"
+                    disabled={saving}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Input
+              value={newIp}
+              onChange={(e) => setNewIp(e.target.value)}
+              placeholder="e.g. 203.0.113.5"
+              className="font-mono text-sm flex-1"
+              onKeyDown={(e) => e.key === "Enter" && handleAddIp()}
+            />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleAddIp}
+              disabled={!newIp.trim() || saving}
+            >
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add IP"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -457,40 +1031,14 @@ function ApiKeySettings({
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {apiKeys.map((key) => (
-                <div
+                <ApiKeyItem
                   key={key.id}
-                  className="flex items-center justify-between py-3 px-4 rounded-lg bg-zinc-800/30 border border-zinc-800"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Key className="h-4 w-4 text-zinc-500 shrink-0" />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <code className="text-sm text-white font-mono">
-                          {key.key_prefix}...
-                        </code>
-                        <Badge
-                          variant={key.is_test ? "warning" : "success"}
-                        >
-                          {key.is_test ? "test" : "live"}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-zinc-500 mt-0.5">
-                        {key.label} — Created {formatDate(key.created_at)}
-                        {key.last_used_at && ` — Last used ${formatDate(key.last_used_at)}`}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-zinc-500 hover:text-red-400"
-                    onClick={() => handleDeleteKey(key.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                  apiKey={key}
+                  merchantId={merchantId}
+                  onDelete={handleDeleteKey}
+                />
               ))}
             </div>
           )}
@@ -887,6 +1435,113 @@ function WebhookSettings({
             ))}
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+const NOTIFICATION_OPTIONS: {
+  key: keyof NotificationPreferences;
+  label: string;
+  description: string;
+}[] = [
+  {
+    key: "payment_received",
+    label: "Payment received",
+    description: "Get notified when a payment is confirmed on-chain.",
+  },
+  {
+    key: "payment_failed",
+    label: "Payment failed",
+    description: "Get notified when a payment fails or expires.",
+  },
+  {
+    key: "ticket_reply",
+    label: "Ticket replies",
+    description: "Get notified when an admin replies to your support ticket.",
+  },
+  {
+    key: "withdrawal_complete",
+    label: "Withdrawal complete",
+    description: "Get notified when a withdrawal finishes processing.",
+  },
+  {
+    key: "weekly_summary",
+    label: "Weekly summary",
+    description: "Receive a weekly email summarizing your revenue and activity.",
+  },
+];
+
+function NotificationSettings({
+  merchantId,
+  preferences,
+}: {
+  merchantId: string;
+  preferences: NotificationPreferences;
+}) {
+  const [prefs, setPrefs] = useState<NotificationPreferences>(preferences);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const router = useRouter();
+  const supabase = createClient();
+
+  function togglePref(key: keyof NotificationPreferences) {
+    setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    const { error } = await supabase
+      .from("merchants")
+      .update({ notification_preferences: prefs })
+      .eq("id", merchantId);
+
+    setSaving(false);
+    if (!error) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+      router.refresh();
+    }
+  }
+
+  return (
+    <Card id="notifications">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Bell className="h-5 w-5 text-zinc-400" />
+          Email Notifications
+        </CardTitle>
+        <CardDescription>
+          Choose which email notifications you&apos;d like to receive.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-4">
+          {NOTIFICATION_OPTIONS.map((opt) => (
+            <div
+              key={opt.key}
+              className="flex items-center justify-between py-3 px-4 rounded-lg bg-zinc-800/30 border border-zinc-800"
+            >
+              <div>
+                <p className="text-sm font-medium text-white">{opt.label}</p>
+                <p className="text-xs text-zinc-500 mt-0.5">{opt.description}</p>
+              </div>
+              <Switch
+                checked={prefs[opt.key]}
+                onCheckedChange={() => togglePref(opt.key)}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : "Save Preferences"}
+          </Button>
+          {saved && (
+            <span className="text-sm text-emerald-400">Preferences saved!</span>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
