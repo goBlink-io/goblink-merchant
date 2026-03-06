@@ -36,7 +36,7 @@ export async function validateApiKey(
   const prefix = apiKey.slice(0, apiKey.indexOf("_", 3) + 1 + 8); // e.g., "gb_live_" + first 8 chars
   const { data: keys, error } = await supabase
     .from("api_keys")
-    .select("id, merchant_id, key_hash, is_test, allowed_ips")
+    .select("id, merchant_id, key_hash, is_test, allowed_ips, merchants!inner(suspended_at)")
     .like("key_prefix", `${prefix.slice(0, 12)}%`);
 
   if (error || !keys || keys.length === 0) {
@@ -46,6 +46,12 @@ export async function validateApiKey(
   for (const key of keys) {
     const matches = await bcrypt.compare(apiKey, key.key_hash);
     if (matches) {
+      // Suspended merchant check
+      const merchant = key.merchants as unknown as { suspended_at: string | null };
+      if (merchant?.suspended_at) {
+        return { forbidden: true };
+      }
+
       // IP allowlist check
       const allowedIps: string[] = key.allowed_ips ?? [];
       if (allowedIps.length > 0) {
