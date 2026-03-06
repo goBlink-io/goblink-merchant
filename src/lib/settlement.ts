@@ -83,9 +83,9 @@ export async function initiateSettlement(params: {
   const amountIn = (quoteObj.amount_in as string) ?? null;
   const amountOut = (quoteObj.amount_out as string) ?? null;
 
-  // Persist settlement metadata on the payment
+  // Persist settlement metadata on the payment (idempotency: only if not already settled)
   const supabase = getServiceClient();
-  const { error } = await supabase
+  const { data: updated, error, count } = await supabase
     .from("payments")
     .update({
       deposit_address: depositAddress,
@@ -94,10 +94,16 @@ export async function initiateSettlement(params: {
       settlement_chain: settlementChain,
       settlement_token: settlementToken,
     })
-    .eq("id", paymentId);
+    .eq("id", paymentId)
+    .eq("settlement_status", "none")
+    .select("id");
 
   if (error) {
     throw new Error(`Failed to update payment with settlement data: ${error.message}`);
+  }
+
+  if (!updated || updated.length === 0) {
+    throw new Error(`Settlement already initiated for payment ${paymentId}`);
   }
 
   return { depositAddress, intentId, amountIn, amountOut };
