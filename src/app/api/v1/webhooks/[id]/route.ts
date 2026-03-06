@@ -10,7 +10,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for"));
   if (isApiForbidden(auth)) {
     return apiError("IP address not allowed for this API key", 403);
   }

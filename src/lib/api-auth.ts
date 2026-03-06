@@ -1,6 +1,23 @@
 import { createClient } from "@supabase/supabase-js";
 import bcrypt from "bcryptjs";
 
+/**
+ * Extract the real client IP from request headers.
+ * Prefers x-real-ip (set by Vercel from actual client IP, cannot be spoofed).
+ * Falls back to the rightmost (last) value in x-forwarded-for (added by the
+ * nearest trusted proxy). Never trusts the leftmost x-forwarded-for value.
+ */
+export function getClientIp(requestIp: string | null | undefined): string | undefined {
+  if (!requestIp) return undefined;
+
+  // If it looks like a single IP (no commas), it's likely from x-real-ip
+  if (!requestIp.includes(",")) return requestIp.trim();
+
+  // Multiple values: take the rightmost (last hop added by trusted proxy)
+  const parts = requestIp.split(",").map((s) => s.trim()).filter(Boolean);
+  return parts[parts.length - 1];
+}
+
 // Use service role for API key validation (bypasses RLS)
 function getServiceClient() {
   return createClient(
@@ -55,7 +72,7 @@ export async function validateApiKey(
       // IP allowlist check
       const allowedIps: string[] = key.allowed_ips ?? [];
       if (allowedIps.length > 0) {
-        const ip = requestIp?.split(",")[0]?.trim();
+        const ip = getClientIp(requestIp);
         if (!ip || !allowedIps.includes(ip)) {
           return { forbidden: true };
         }

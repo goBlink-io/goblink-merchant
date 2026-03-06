@@ -9,7 +9,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 
 // POST /api/v1/webhooks — Register a webhook endpoint
 export async function POST(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for"));
   if (isApiForbidden(auth)) {
     return apiError("IP address not allowed for this API key", 403);
   }
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
 
 // GET /api/v1/webhooks — List webhook endpoints
 export async function GET(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for"));
   if (isApiForbidden(auth)) {
     return apiError("IP address not allowed for this API key", 403);
   }

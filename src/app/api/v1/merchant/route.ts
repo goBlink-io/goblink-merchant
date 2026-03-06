@@ -6,7 +6,7 @@ import { logAudit } from "@/lib/audit";
 
 // GET /api/v1/merchant — Get merchant profile
 export async function GET(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for"));
   if (isApiForbidden(auth)) {
     return apiError("IP address not allowed for this API key", 403);
   }
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
 
 // PATCH /api/v1/merchant — Update merchant settings
 export async function PATCH(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for"));
   if (isApiForbidden(auth)) {
     return apiError("IP address not allowed for this API key", 403);
   }
