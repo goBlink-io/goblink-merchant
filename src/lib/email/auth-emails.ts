@@ -1,6 +1,6 @@
 import { getServiceClient } from "@/lib/service-client";
 import { sendEmail } from "./client";
-import { getTemplate, renderTemplate } from "./sender";
+import { getTemplate, renderTemplate, htmlEncode } from "./sender";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://merchant.goblink.io";
 
@@ -8,6 +8,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://merchant.goblink.io"
  * Fallback verification email HTML when DB template is unavailable.
  */
 function fallbackVerificationHtml(businessName: string, verificationUrl: string): string {
+  const safeName = htmlEncode(businessName);
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background-color:#09090b;font-family:Arial,Helvetica,sans-serif;">
@@ -20,7 +21,7 @@ function fallbackVerificationHtml(businessName: string, verificationUrl: string)
 <tr><td style="background-color:#18181b;border-radius:12px;padding:32px;border:1px solid #27272a;">
   <h1 style="color:#fafafa;font-size:20px;margin:0 0 16px;">Verify your email</h1>
   <p style="color:#a1a1aa;font-size:14px;line-height:22px;margin:0 0 24px;">
-    Hi ${businessName}, please verify your email address to get started with goBlink Merchant.
+    Hi ${safeName}, please verify your email address to get started with goBlink Merchant.
   </p>
   <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
   <tr><td align="center" style="background-color:#2563EB;border-radius:8px;padding:12px 24px;">
@@ -39,6 +40,7 @@ function fallbackVerificationHtml(businessName: string, verificationUrl: string)
  * Fallback password reset email HTML when DB template is unavailable.
  */
 function fallbackPasswordResetHtml(businessName: string, resetUrl: string): string {
+  const safeName = htmlEncode(businessName);
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background-color:#09090b;font-family:Arial,Helvetica,sans-serif;">
@@ -51,7 +53,7 @@ function fallbackPasswordResetHtml(businessName: string, resetUrl: string): stri
 <tr><td style="background-color:#18181b;border-radius:12px;padding:32px;border:1px solid #27272a;">
   <h1 style="color:#fafafa;font-size:20px;margin:0 0 16px;">Reset your password</h1>
   <p style="color:#a1a1aa;font-size:14px;line-height:22px;margin:0 0 24px;">
-    Hi ${businessName}, click below to reset your password.
+    Hi ${safeName}, click below to reset your password.
   </p>
   <table cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
   <tr><td align="center" style="background-color:#2563EB;border-radius:8px;padding:12px 24px;">

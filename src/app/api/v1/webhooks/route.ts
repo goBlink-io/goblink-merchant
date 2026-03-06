@@ -4,16 +4,22 @@ import { validateApiKey, isApiForbidden } from "@/lib/api-auth";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
+import { validateWebhookUrl } from "@/lib/webhooks";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // POST /api/v1/webhooks — Register a webhook endpoint
 export async function POST(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for"));
   if (isApiForbidden(auth)) {
     return apiError("IP address not allowed for this API key", 403);
   }
   if (!auth) {
     return apiError("Invalid or missing API key", 401);
   }
+
+  // Rate limit by API key ID (fail-closed for webhook creation)
+  const rl = await checkRateLimit(request, "api-create-webhook", auth.keyId);
+  if (!rl.allowed) return rl.response!;
 
   let body: Record<string, unknown>;
   try {
@@ -31,14 +37,11 @@ export async function POST(request: NextRequest) {
     return apiError("url is required", 400);
   }
 
-  // Validate URL
+  // Validate URL (SSRF protection: checks HTTPS + resolves hostname to block private IPs)
   try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") {
-      return apiError("Webhook URL must use HTTPS", 400);
-    }
-  } catch {
-    return apiError("Invalid URL format", 400);
+    await validateWebhookUrl(url);
+  } catch (err) {
+    return apiError(err instanceof Error ? err.message : "Invalid webhook URL", 400);
   }
 
   const validEvents = [
@@ -109,7 +112,7 @@ export async function POST(request: NextRequest) {
 
 // GET /api/v1/webhooks — List webhook endpoints
 export async function GET(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for"));
   if (isApiForbidden(auth)) {
     return apiError("IP address not allowed for this API key", 403);
   }

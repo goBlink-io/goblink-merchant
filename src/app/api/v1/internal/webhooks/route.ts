@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
+import { validateWebhookUrl } from "@/lib/webhooks";
 
 // POST — Create webhook endpoint (authenticated via session)
 export async function POST(request: NextRequest) {
@@ -29,6 +30,13 @@ export async function POST(request: NextRequest) {
 
   if (!url || !events || events.length === 0) {
     return apiError("url and events are required", 400);
+  }
+
+  // SSRF protection: validate URL before storing
+  try {
+    await validateWebhookUrl(url);
+  } catch (err) {
+    return apiError(err instanceof Error ? err.message : "Invalid webhook URL", 400);
   }
 
   // Verify merchant belongs to this user

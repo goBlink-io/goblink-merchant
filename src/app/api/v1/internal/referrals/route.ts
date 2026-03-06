@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 function generateReferralCode(): string {
-  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
-  let code = "ref_";
-  for (let i = 0; i < 8; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
+  const random = crypto.randomBytes(6).toString("base64url").toUpperCase().slice(0, 8);
+  return `ref_${random}`;
 }
 
 // GET /api/v1/internal/referrals — fetch merchant referrals + stats

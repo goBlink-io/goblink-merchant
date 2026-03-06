@@ -19,7 +19,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   // Rate limit
-  const rl = await checkRateLimit(request, "checkout-status");
+  const rl = await checkRateLimit(request, "checkout-status", undefined, true);
   if (!rl.allowed) return withCors(request, rl.response!);
 
   const { id } = await params;

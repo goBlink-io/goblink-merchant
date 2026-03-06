@@ -259,8 +259,9 @@ export async function getGlobalPayments(params: {
   if (params.token) query = query.eq("crypto_token", params.token);
   if (params.isTest !== undefined) query = query.eq("is_test", params.isTest === "true");
   if (params.search) {
+    const term = `%${params.search.replace(/[,.*()]/g, "")}%`;
     query = query.or(
-      `id.ilike.%${params.search}%,external_order_id.ilike.%${params.search}%,send_tx_hash.ilike.%${params.search}%`
+      `id.ilike.${term},external_order_id.ilike.${term},send_tx_hash.ilike.${term}`
     );
   }
 

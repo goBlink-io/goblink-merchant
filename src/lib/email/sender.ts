@@ -77,14 +77,24 @@ export async function getTemplate(type: string): Promise<EmailTemplate | null> {
   }
 }
 
+/** Escape HTML special characters to prevent injection */
+export function htmlEncode(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 /**
- * Replace all {{variable}} placeholders with actual values.
+ * Replace all {{variable}} placeholders with HTML-encoded values.
  * Strips any unreplaced {{variables}}.
  */
 export function renderTemplate(html: string, variables: Record<string, string>): string {
   let result = html;
   for (const [key, value] of Object.entries(variables)) {
-    result = result.replaceAll(`{{${key}}}`, value);
+    result = result.replaceAll(`{{${key}}}`, htmlEncode(value));
   }
   // Strip unreplaced placeholders
   result = result.replace(/\{\{[a-zA-Z_]+\}\}/g, "");

@@ -5,12 +5,44 @@ import { dispatchWebhooks } from "@/lib/webhooks";
 import { logAudit } from "@/lib/audit";
 import { checkRateLimit, withRateLimitHeaders } from "@/lib/rate-limit";
 import { withCors, handleCorsOptions } from "@/lib/cors";
+import { timingSafeCompare } from "@/lib/timing-safe";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Minimal validation: non-empty string that could be a crypto address (8+ hex-ish chars)
 function isPlausibleAddress(addr: unknown): addr is string {
   return typeof addr === "string" && addr.trim().length >= 8;
+}
+
+// Validate transaction hash format based on chain
+function isTxHash(hash: string, chain: string): boolean {
+  const lc = chain.toLowerCase();
+  if (lc === "solana") {
+    // Solana tx signatures are base58-encoded, typically 87-88 chars
+    return /^[1-9A-HJ-NP-Za-km-z]{64,128}$/.test(hash);
+  }
+  // EVM chains (Ethereum, Polygon, Arbitrum, Base, etc): 0x-prefixed 64 hex chars
+  return /^0x[0-9a-fA-F]{64}$/.test(hash);
+}
+
+function validateCustomFields(fields: unknown): string | null {
+  if (fields === undefined || fields === null) return null;
+  if (typeof fields !== "object" || Array.isArray(fields)) {
+    return "customFields must be an object";
+  }
+  const entries = Object.entries(fields as Record<string, unknown>);
+  if (entries.length > 10) {
+    return "customFields cannot have more than 10 keys";
+  }
+  for (const [key, value] of entries) {
+    if (typeof key !== "string" || typeof value !== "string") {
+      return "customFields keys and values must be strings";
+    }
+    if (value.length > 256) {
+      return "customFields values cannot exceed 256 characters";
+    }
+  }
+  return null;
 }
 
 // OPTIONS — CORS preflight
@@ -24,7 +56,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   // Rate limit
-  const rl = await checkRateLimit(request, "checkout-complete");
+  const rl = await checkRateLimit(request, "checkout-complete", undefined, true);
   if (!rl.allowed) return withCors(request, rl.response!);
 
   const { id } = await params;
@@ -51,6 +83,17 @@ export async function POST(
 
   if (!sendTxHash || !payerAddress || !payerChain) {
     return withCors(request, apiError("sendTxHash, payerAddress, and payerChain are required", 400));
+  }
+
+  // Validate txHash format
+  if (!isTxHash(sendTxHash, payerChain)) {
+    return withCors(request, apiError("sendTxHash is not a valid transaction hash for the specified chain", 400));
+  }
+
+  // Validate customFields
+  const cfError = validateCustomFields(customFields);
+  if (cfError) {
+    return withCors(request, apiError(cfError, 400));
   }
 
   // Require a valid-looking deposit address
@@ -155,7 +198,7 @@ export async function PATCH(
     return apiError("CRON_SECRET not configured", 500);
   }
 
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!authHeader || !timingSafeCompare(authHeader, `Bearer ${cronSecret}`)) {
     return apiError("Unauthorized", 401);
   }
 

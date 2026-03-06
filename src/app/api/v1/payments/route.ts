@@ -4,16 +4,21 @@ import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { dispatchWebhooks } from "@/lib/webhooks";
 import { convertToUsd, getSupportedCurrencies } from "@/lib/forex";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // POST /api/v1/payments — Create a payment
 export async function POST(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for"));
   if (isApiForbidden(auth)) {
     return apiError("IP address not allowed for this API key", 403);
   }
   if (!auth) {
     return apiError("Invalid or missing API key", 401);
   }
+
+  // Rate limit by API key ID (fail-closed for payment creation)
+  const rl = await checkRateLimit(request, "api-create-payment", auth.keyId);
+  if (!rl.allowed) return rl.response!;
 
   let body: Record<string, unknown>;
   try {
@@ -153,7 +158,7 @@ export async function POST(request: NextRequest) {
 
 // GET /api/v1/payments — List payments
 export async function GET(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip"));
+  const auth = await validateApiKey(request.headers.get("authorization"), request.headers.get("x-real-ip") || request.headers.get("x-forwarded-for"));
   if (isApiForbidden(auth)) {
     return apiError("IP address not allowed for this API key", 403);
   }

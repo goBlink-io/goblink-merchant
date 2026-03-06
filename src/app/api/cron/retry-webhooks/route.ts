@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { getServiceClient } from "@/lib/service-client";
 import { processRetryDelivery } from "@/lib/webhooks";
 import { apiError, apiSuccess } from "@/lib/api-response";
+import { timingSafeCompare } from "@/lib/timing-safe";
 
 // GET /api/cron/retry-webhooks — Retries failed webhook deliveries.
 // Picks up rows where response_status IS NULL (queued for retry),
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
     return apiError("CRON_SECRET not configured", 500);
   }
 
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  if (!authHeader || !timingSafeCompare(authHeader, `Bearer ${cronSecret}`)) {
     return apiError("Unauthorized", 401);
   }
 
