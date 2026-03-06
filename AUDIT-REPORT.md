@@ -11,7 +11,7 @@
 
 The goBlink Merchant platform demonstrates **solid foundational security practices**: RLS is enabled on most tables, API keys are bcrypt-hashed, HMAC-SHA256 webhook signing is implemented, CRON_SECRET protects cron endpoints, and a Content Security Policy is configured. The code uses parameterized queries via the Supabase client (no raw SQL), and sensitive env vars are properly excluded from the client bundle.
 
-However, this audit identified **8 critical**, **8 high**, **10 medium**, and **4 low** severity findings (30 total). The most severe issues include: `admins` table with no RLS (any user can self-promote to admin), `email_templates` with no RLS (phishing injection), CRON_SECRET timing attacks, unauthenticated real deposit submission, merchant `user_id` mutation enabling account hijacking, and webhook secrets in plaintext.
+However, this audit identified **9 critical**, **9 high**, **13 medium**, and **5 low** severity findings (36 total). The most severe issues include: PostgREST filter injection enabling cross-merchant data exfiltration, `admins` table with no RLS (any user can self-promote to admin), `email_templates` with no RLS (phishing injection), CRON_SECRET timing attacks, unauthenticated real deposit submission, merchant `user_id` mutation enabling account hijacking, and webhook secrets in plaintext.
 
 ---
 
@@ -156,6 +156,35 @@ CREATE POLICY "merchants_update_own" ON merchants
   FOR UPDATE USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 ```
+
+---
+
+### C9: PostgREST filter injection via unsanitized search in `.or()` clauses
+
+**File:** `src/lib/invoices/queries.ts:67-68`
+**Also:** `src/lib/admin/queries.ts:262-263`
+**Also:** `src/app/(dashboard)/dashboard/payments/page.tsx:48-49`
+
+**Description:** User-supplied `search` values are interpolated directly into PostgREST `.or()` filter strings without any sanitization:
+```typescript
+query = query.or(
+  `invoice_number.ilike.%${filters.search}%,recipient_name.ilike.%${filters.search}%`
+);
+```
+PostgREST filter syntax uses commas as logical OR delimiters and dots as operator separators. A search value containing `,` can inject additional filter conditions. For example, a search of `%,user_id.neq.00000000-0000-0000-0000-000000000000` would add an extra filter that exposes records outside the intended scope.
+
+**This is most critical in admin queries** (`src/lib/admin/queries.ts:262-263`), which operate on the service client without RLS. An admin panel search could be manipulated to exfiltrate data from unrelated merchants by injecting filter conditions.
+
+For dashboard queries, RLS provides a secondary defense layer, but the injection still allows filter logic manipulation within the merchant's own data scope.
+
+**Suggested fix:** Sanitize search input by escaping PostgREST special characters, or use parameterized filtering:
+```typescript
+const sanitized = filters.search.replace(/[,.*()]/g, "");
+query = query.or(
+  `invoice_number.ilike.%${sanitized}%,recipient_name.ilike.%${sanitized}%`
+);
+```
+Or better, use individual `.ilike()` filters chained with `.or()` as a PostgREST filter object rather than string interpolation.
 
 ---
 
@@ -327,6 +356,20 @@ if (merchant?.suspended_at) return { forbidden: true };
 
 ---
 
+### H9: In-memory rate limiting on chat endpoint -- ineffective on serverless
+
+**File:** `src/app/api/v1/internal/chat/route.ts:7-12`
+
+**Description:** The chat endpoint uses a module-level `new Map()` for rate limiting:
+```typescript
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+```
+On Vercel (serverless), each invocation may run in a different container, making this map effectively useless -- the rate limit state is not shared across instances. This also violates the project's "No in-memory caches" build rule (`CLAUDE.md`). An attacker can bypass this rate limit entirely by making rapid requests that hit different serverless instances, potentially abusing the AI chat endpoint for unlimited LLM API calls at goBlink's expense.
+
+**Suggested fix:** Use the existing Supabase-based `checkRateLimit` function from `src/lib/rate-limit.ts`, or use Vercel KV / Upstash Redis for shared state.
+
+---
+
 ## MEDIUM Priority Findings
 
 ### M1: Refund endpoint has no idempotency guard on payment status update
@@ -489,6 +532,60 @@ const safePath = next.startsWith("/") && !next.startsWith("//") ? next : "/dashb
 
 ---
 
+### M11: Insecure referral code generation with `Math.random()`
+
+**File:** `src/app/api/v1/internal/referrals/route.ts:6-12`
+
+**Description:** Referral codes are generated using `Math.random()`, which is not cryptographically secure:
+```typescript
+code += chars[Math.floor(Math.random() * chars.length)];
+```
+With only 8 characters from a 36-character alphabet (≈41 bits of entropy from a predictable PRNG), referral codes are guessable. An attacker could enumerate valid referral codes to fraudulently attribute referrals to themselves, earning referral bonuses for merchants they didn't actually refer.
+
+**Suggested fix:** Use `crypto.randomBytes()` or `crypto.getRandomValues()`:
+```typescript
+import crypto from "crypto";
+const bytes = crypto.randomBytes(8);
+const code = "ref_" + Array.from(bytes).map(b => chars[b % chars.length]).join("");
+```
+
+---
+
+### M12: CSV injection in payment/tax export
+
+**File:** `src/app/api/v1/internal/export/payments/route.ts:96-115`
+**Also:** `src/app/api/v1/internal/export/tax-summary/route.ts`
+
+**Description:** Exported CSV values are quoted and internal quotes are escaped (line 113), but values starting with `=`, `+`, `-`, or `@` can still be interpreted as formulas by Excel/Google Sheets. Fields like `external_order_id`, `customer_wallet`, or `crypto_token` are merchant- or customer-supplied. A malicious value like `=HYPERLINK("https://evil.com","Click")` or `=CMD(...)` could execute when a merchant opens the CSV in a spreadsheet application.
+
+**Suggested fix:** Prefix potentially dangerous values with a single quote or tab character:
+```typescript
+function sanitizeCsvValue(v: string): string {
+  if (/^[=+\-@\t\r]/.test(v)) return `'${v}`;
+  return v;
+}
+```
+
+---
+
+### M13: Content-Disposition header injection in export filenames
+
+**File:** `src/app/api/v1/internal/export/payments/route.ts:117-121`
+
+**Description:** The export filename is constructed from query parameters without sanitization:
+```typescript
+const filename = `payments-${startDate || "all"}-${endDate || "now"}.csv`;
+```
+If `startDate` or `endDate` contain special characters (e.g., `"; filename="malicious.exe`), the Content-Disposition header could be manipulated. While modern browsers handle this reasonably, older clients may be vulnerable.
+
+**Suggested fix:** Sanitize date parameters to alphanumeric + hyphens only:
+```typescript
+const safe = (s: string) => s.replace(/[^a-zA-Z0-9\-]/g, "");
+const filename = `payments-${safe(startDate || "all")}-${safe(endDate || "now")}.csv`;
+```
+
+---
+
 ## LOW Priority / Code Quality
 
 ### L1: API key validation scans all keys with matching prefix -- O(n) bcrypt comparisons
@@ -554,6 +651,23 @@ REVOKE EXECUTE ON FUNCTION cleanup_rate_limits FROM authenticated, anon;
 
 ---
 
+### L5: Explorer URL constructed from unvalidated `txHash` input
+
+**File:** `src/lib/explorer.ts:22`
+
+**Description:** The `getExplorerTxUrl` function concatenates `txHash` directly into a URL without validation:
+```typescript
+return `${base}${txHash}`;
+```
+If `txHash` contains path traversal or query string characters (e.g., `../malicious` or `?redirect=evil.com`), the resulting URL could point to an unexpected page. Since these URLs are displayed in the dashboard and checkout UI as clickable links, a stored malicious `sendTxHash` value (set via the unauthenticated `complete` endpoint, see H4) could redirect merchants to a phishing site.
+
+**Suggested fix:** Validate `txHash` against expected format (hex string, `0x`-prefixed for EVM chains):
+```typescript
+if (!/^(0x)?[a-fA-F0-9]+$/.test(txHash)) return null;
+```
+
+---
+
 ## Positive Observations
 
 These areas are implemented well:
@@ -583,6 +697,7 @@ These areas are implemented well:
 | C6 | CRITICAL | `email_templates` has NO RLS -- phishing injection | `00007_email_templates.sql:4` |
 | C7 | CRITICAL | SECURITY DEFINER without search_path | `00001_initial_schema.sql:341` |
 | C8 | CRITICAL | Merchants UPDATE allows `user_id` mutation | `00001_initial_schema.sql:198` |
+| C9 | CRITICAL | PostgREST filter injection via `.or()` | `invoices/queries.ts:67`, `admin/queries.ts:262` |
 | H1 | HIGH | Webhook URLs -- no SSRF protection | `webhooks.ts:51`, `webhooks/route.ts:49` |
 | H2 | HIGH | Rate limiting fails open | `rate-limit.ts:43-45` |
 | H3 | HIGH | No rate limiting on API routes | `v1/payments/route.ts` |
@@ -591,6 +706,7 @@ These areas are implemented well:
 | H6 | HIGH | Settlement initiation no idempotency guard | `settlement.ts:97` |
 | H7 | HIGH | Settlement amount not validated vs actual | `settlement-status/route.ts:45` |
 | H8 | HIGH | Suspended merchants can still use API keys | `api-auth.ts:46` |
+| H9 | HIGH | In-memory rate limiting on serverless | `chat/route.ts:7` |
 | M1 | MEDIUM | Refund race condition | `refunds/route.ts:119` |
 | M2 | MEDIUM | No webhook replay protection | `webhooks.ts:41` |
 | M3 | MEDIUM | Middleware may not be wired | `proxy.ts:58` |
@@ -601,10 +717,14 @@ These areas are implemented well:
 | M8 | MEDIUM | send-verification/send-reset listUsers() DoS | `send-verification/route.ts:27` |
 | M9 | MEDIUM | ticket_messages allows sender forgery | `00004_tickets.sql:38` |
 | M10 | MEDIUM | Payments UPDATE policy too permissive | `00001_initial_schema.sql:224` |
+| M11 | MEDIUM | Insecure referral code generation (Math.random) | `referrals/route.ts:10` |
+| M12 | MEDIUM | CSV injection in payment export | `export/payments/route.ts:96` |
+| M13 | MEDIUM | Content-Disposition header injection | `export/payments/route.ts:117` |
 | L1 | LOW | O(n) bcrypt key validation | `api-auth.ts:36` |
 | L2 | LOW | No audit_logs INSERT policy | `00002_security_hardening.sql:24` |
 | L3 | LOW | Error messages leak internals | `v1/payments/route.ts:95` |
 | L4 | LOW | rate_limits table no RLS | `00002_security_hardening.sql:33` |
+| L5 | LOW | Explorer URL from unvalidated txHash | `explorer.ts:22` |
 
 ---
 
