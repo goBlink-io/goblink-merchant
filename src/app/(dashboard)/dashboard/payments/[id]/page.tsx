@@ -60,7 +60,7 @@ export default async function PaymentDetailPage({
   if (!payment) notFound();
 
   const dc = merchant.display_currency || "USD";
-  const rate = await getExchangeRate(dc);
+  const rate = (await getExchangeRate(dc)) ?? 1;
   const showDc = dc !== "USD";
 
   function fmtDc(amountUsd: number): string {
