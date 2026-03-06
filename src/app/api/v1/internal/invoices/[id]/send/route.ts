@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/service-client";
 import { apiError, apiSuccess } from "@/lib/api-response";
 import { logAudit } from "@/lib/audit";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { getInvoiceById } from "@/lib/invoices/queries";
 import { sendEmail } from "@/lib/email/client";
 import { InvoiceSentEmail } from "@/lib/email/templates/invoice-sent";
@@ -35,6 +36,10 @@ export async function POST(
   if (!invoice.recipient_email) {
     return apiError("Invoice has no recipient email", 400);
   }
+
+  // Rate limit: 3 sends per hour per merchant+recipient (M22)
+  const rl = await checkRateLimit(request, "invoice-send", `${merchant.id}:${invoice.recipient_email}`);
+  if (!rl.allowed) return rl.response!;
 
   if (invoice.status === "paid") {
     return apiError("Invoice is already paid", 400);
