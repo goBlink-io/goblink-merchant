@@ -11,7 +11,7 @@
 
 The goBlink Merchant platform demonstrates **solid foundational security practices**: RLS is enabled on most tables, API keys are bcrypt-hashed, HMAC-SHA256 webhook signing is implemented, CRON_SECRET protects cron endpoints, and a Content Security Policy is configured. The code uses parameterized queries via the Supabase client (no raw SQL), and sensitive env vars are properly excluded from the client bundle.
 
-However, this audit identified **8 critical**, **7 high**, **8 medium**, and **4 low** severity findings (27 total). The most severe issues include: `admins` table with no RLS (any user can self-promote to admin), `email_templates` with no RLS (phishing injection), CRON_SECRET timing attacks, unauthenticated real deposit submission, merchant `user_id` mutation enabling account hijacking, and webhook secrets in plaintext.
+However, this audit identified **8 critical**, **8 high**, **10 medium**, and **4 low** severity findings (30 total). The most severe issues include: `admins` table with no RLS (any user can self-promote to admin), `email_templates` with no RLS (phishing injection), CRON_SECRET timing attacks, unauthenticated real deposit submission, merchant `user_id` mutation enabling account hijacking, and webhook secrets in plaintext.
 
 ---
 
@@ -312,6 +312,21 @@ Combined with the 1% default slippage tolerance (`src/lib/oneclick.ts:45`), the 
 
 ---
 
+### H8: Suspended merchants can still use API keys
+
+**File:** `src/lib/api-auth.ts:46-69`
+
+**Description:** The `validateApiKey()` function checks the API key hash and IP allowlist, but never checks whether the merchant is suspended (`suspended_at IS NOT NULL`). A suspended merchant can continue creating payments, registering webhooks, and using the full API as if nothing happened.
+
+**Suggested fix:** After matching the API key, query the `merchants` table for `suspended_at` and reject with 403:
+```typescript
+const { data: merchant } = await supabase
+  .from("merchants").select("suspended_at").eq("id", key.merchant_id).single();
+if (merchant?.suspended_at) return { forbidden: true };
+```
+
+---
+
 ## MEDIUM Priority Findings
 
 ### M1: Refund endpoint has no idempotency guard on payment status update
@@ -424,17 +439,47 @@ const netAmount = netCents / 100;
 
 ---
 
-### M7: `ticket_messages` policy allows merchants to forge admin replies
+### M7: Auth callback open redirect via `next` parameter
+
+**File:** `src/app/(auth)/auth/callback/route.ts:9,57`
+
+**Description:** The auth callback reads `next` from query params and redirects to `${origin}${next}`:
+```typescript
+const next = searchParams.get("next") ?? "/dashboard";
+return NextResponse.redirect(`${origin}${next}`);
+```
+If `next` is `//evil.com`, the redirect becomes `https://merchant.goblink.io//evil.com` which browsers resolve to `https://evil.com`. An attacker can craft a login link that redirects the user to a phishing site after authentication.
+
+**Suggested fix:** Validate that `next` starts with `/` and does not contain `//`:
+```typescript
+const next = searchParams.get("next") ?? "/dashboard";
+const safePath = next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+```
+
+---
+
+### M8: `send-verification` and `send-reset` call `listUsers()` without auth or rate limiting
+
+**File:** `src/app/api/auth/send-verification/route.ts:27`
+**Also:** `src/app/api/auth/send-reset/route.ts:27`
+
+**Description:** Both routes call `supabase.auth.admin.listUsers()` to find a user by email. This is an O(n) operation that fetches ALL users. These endpoints have no authentication and no rate limiting. An attacker can repeatedly call these to cause a DoS against Supabase, or use timing differences to enumerate registered emails.
+
+**Suggested fix:** Replace `listUsers()` + `.find()` with `supabase.auth.admin.getUserByEmail(email)` for O(1) lookup. Add rate limiting.
+
+---
+
+### M9: `ticket_messages` policy allows merchants to forge admin replies
 
 **File:** `supabase/migrations/00004_tickets.sql:38-44`
 
-**Description:** The `FOR ALL` policy on `ticket_messages` checks ticket ownership but does not constrain `sender_type` or `sender_id`. A merchant can INSERT a message with `sender_type = 'admin'` and any `sender_id`, making it appear as if an admin responded. This could be used for social engineering in shared support contexts.
+**Description:** The `FOR ALL` policy on `ticket_messages` checks ticket ownership but does not constrain `sender_type` or `sender_id`. A merchant can INSERT a message with `sender_type = 'admin'` and any `sender_id`, making it appear as if an admin responded.
 
 **Suggested fix:** Split into separate policies. For INSERT, add `WITH CHECK` enforcing `sender_type = 'merchant' AND sender_id = auth.uid()`.
 
 ---
 
-### M8: Payments UPDATE policy allows merchant to change status/amount/fees
+### M10: Payments UPDATE policy allows merchant to change status/amount/fees
 
 **File:** `supabase/migrations/00001_initial_schema.sql:224-227`
 
@@ -545,14 +590,17 @@ These areas are implemented well:
 | H5 | HIGH | CSP allows unsafe-eval | `next.config.ts:6` |
 | H6 | HIGH | Settlement initiation no idempotency guard | `settlement.ts:97` |
 | H7 | HIGH | Settlement amount not validated vs actual | `settlement-status/route.ts:45` |
+| H8 | HIGH | Suspended merchants can still use API keys | `api-auth.ts:46` |
 | M1 | MEDIUM | Refund race condition | `refunds/route.ts:119` |
 | M2 | MEDIUM | No webhook replay protection | `webhooks.ts:41` |
 | M3 | MEDIUM | Middleware may not be wired | `proxy.ts:58` |
 | M4 | MEDIUM | Webhook secret in API response | `webhooks/route.ts:79` |
 | M5 | MEDIUM | No max payment expiration | `v1/payments/route.ts:68` |
 | M6 | MEDIUM | Floating-point fee math | `settle-payments/route.ts:57` |
-| M7 | MEDIUM | ticket_messages allows sender forgery | `00004_tickets.sql:38` |
-| M8 | MEDIUM | Payments UPDATE policy too permissive | `00001_initial_schema.sql:224` |
+| M7 | MEDIUM | Auth callback open redirect | `auth/callback/route.ts:9` |
+| M8 | MEDIUM | send-verification/send-reset listUsers() DoS | `send-verification/route.ts:27` |
+| M9 | MEDIUM | ticket_messages allows sender forgery | `00004_tickets.sql:38` |
+| M10 | MEDIUM | Payments UPDATE policy too permissive | `00001_initial_schema.sql:224` |
 | L1 | LOW | O(n) bcrypt key validation | `api-auth.ts:36` |
 | L2 | LOW | No audit_logs INSERT policy | `00002_security_hardening.sql:24` |
 | L3 | LOW | Error messages leak internals | `v1/payments/route.ts:95` |
