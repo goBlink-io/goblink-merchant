@@ -11,7 +11,7 @@
 
 The goBlink Merchant platform demonstrates **solid foundational security practices**: RLS is enabled on all tables, API keys are bcrypt-hashed, HMAC-SHA256 webhook signing is implemented, CRON_SECRET protects cron endpoints, and a Content Security Policy is configured. The code uses parameterized queries via the Supabase client (no raw SQL), and sensitive env vars are properly excluded from the client bundle.
 
-However, this audit identified **3 critical**, **5 high**, **6 medium**, and **4 low** severity findings. The critical issues center around: (1) webhook secrets stored in plaintext in the database, (2) CRON_SECRET validated with a non-constant-time string comparison vulnerable to timing attacks, and (3) the simulate endpoint being accessible without authentication, allowing anyone who knows a test payment ID to confirm it.
+However, this audit identified **4 critical**, **5 high**, **6 medium**, and **4 low** severity findings. The critical issues center around: (1) webhook secrets stored in plaintext in the database, (2) CRON_SECRET validated with a non-constant-time string comparison vulnerable to timing attacks, (3) the public quote endpoint allowing unauthenticated real deposit submission (money movement), and (4) the simulate endpoint being accessible without authentication.
 
 ---
 
@@ -60,7 +60,23 @@ if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actua
 
 ---
 
-### C3: Simulate endpoint has no authentication -- anyone can confirm test payments
+### C3: Quote endpoint allows unauthenticated real deposit submission (money movement)
+
+**File:** `src/app/api/checkout/quote/route.ts:59-81`
+
+**Description:** When `dryRun` is explicitly set to `false`, this **public, unauthenticated** endpoint calls `submitDeposit()` which creates a real, non-dry 1Click swap order:
+```typescript
+const isDry = dryRun !== false;  // Only dry if dryRun is NOT explicitly false
+// ...
+: await submitDeposit({ originAsset, destinationAsset, amount, recipient, refundTo, ... });
+```
+Any caller can supply arbitrary `recipient`, `refundTo`, `originAsset`, `destinationAsset`, and `amount` values to initiate real token swaps through goBlink's 1Click account. This could be used to route funds to an attacker-controlled wallet or abuse the platform's swap infrastructure.
+
+**Suggested fix:** Either remove `submitDeposit` from this endpoint entirely (keep it dry-run only), or require API key authentication and validate that `recipient` matches the authenticated merchant's wallet address.
+
+---
+
+### C4: Simulate endpoint has no authentication -- anyone can confirm test payments
 
 **File:** `src/app/api/checkout/[id]/simulate/route.ts:17-134`
 
@@ -397,7 +413,8 @@ These areas are implemented well:
 |---|----------|---------|------|
 | C1 | CRITICAL | Webhook secrets stored plaintext in DB | `webhooks/route.ts:46`, `00001_initial_schema.sql:143` |
 | C2 | CRITICAL | CRON_SECRET timing attack vulnerability | `settle-payments/route.ts:24`, all cron routes |
-| C3 | CRITICAL | Simulate endpoint unauthenticated | `simulate/route.ts:17` |
+| C3 | CRITICAL | Quote endpoint allows real deposits unauthenticated | `checkout/quote/route.ts:59` |
+| C4 | CRITICAL | Simulate endpoint unauthenticated | `simulate/route.ts:17` |
 | H1 | HIGH | Webhook URLs -- no SSRF protection | `webhooks.ts:51`, `webhooks/route.ts:49` |
 | H2 | HIGH | Rate limiting fails open | `rate-limit.ts:43-45` |
 | H3 | HIGH | No rate limiting on API routes | `v1/payments/route.ts` |
