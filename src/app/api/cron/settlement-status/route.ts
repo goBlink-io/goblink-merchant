@@ -7,7 +7,7 @@ import { logAudit } from "@/lib/audit";
 import { insertNotification } from "@/lib/notifications";
 import { timingSafeCompare } from "@/lib/timing-safe";
 
-const FEE_RATE = 0.01; // 1%
+const FEE_BPS = 100; // 1% = 100 basis points
 
 // GET /api/cron/settlement-status — Poll 1Click for settlement updates.
 // Protected by CRON_SECRET. Checks payments with settlement_status in (pending, processing).
@@ -31,7 +31,8 @@ export async function GET(request: NextRequest) {
     .from("payments")
     .select("*")
     .in("settlement_status", ["pending", "processing"])
-    .not("deposit_address", "is", null);
+    .not("deposit_address", "is", null)
+    .limit(100); // Bound query to prevent serverless timeout
 
   if (fetchErr) {
     console.error("[settlement-status] Failed to fetch payments:", fetchErr.message);
@@ -43,9 +44,13 @@ export async function GET(request: NextRequest) {
       const result = await checkSettlementStatus(payment.deposit_address);
 
       if (result.status === "SUCCESS") {
-        const amount = Number(payment.amount);
-        const feeAmount = Math.round(amount * FEE_RATE * 100) / 100;
-        const netAmount = Math.round((amount - feeAmount) * 100) / 100;
+        // Integer arithmetic: work in cents to avoid float precision issues (M8)
+        // Must match settle-payments cron exactly
+        const amountCents = Math.round(Number(payment.amount) * 100);
+        const feeCents = Math.floor(amountCents * FEE_BPS / 10000);
+        const netCents = amountCents - feeCents;
+        const feeAmount = feeCents / 100;
+        const netAmount = netCents / 100;
         const now = new Date().toISOString();
 
         const { error: updateErr } = await supabase
@@ -69,7 +74,7 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        dispatchWebhooks(payment.merchant_id, {
+        await dispatchWebhooks(payment.merchant_id, {
           event: "payment.confirmed",
           paymentId: payment.id,
           merchantId: payment.merchant_id,
@@ -86,7 +91,7 @@ export async function GET(request: NextRequest) {
           },
         });
 
-        insertNotification(
+        await insertNotification(
           payment.merchant_id,
           "payment_received",
           "Payment settled",
@@ -94,7 +99,7 @@ export async function GET(request: NextRequest) {
           `/dashboard/payments/${payment.id}`
         );
 
-        logAudit({
+        await logAudit({
           merchantId: payment.merchant_id,
           actor: "system",
           action: "settlement.confirmed",
@@ -114,7 +119,7 @@ export async function GET(request: NextRequest) {
           .update({ settlement_status: "failed" })
           .eq("id", payment.id);
 
-        dispatchWebhooks(payment.merchant_id, {
+        await dispatchWebhooks(payment.merchant_id, {
           event: "payment.failed",
           paymentId: payment.id,
           merchantId: payment.merchant_id,
@@ -126,7 +131,7 @@ export async function GET(request: NextRequest) {
           },
         });
 
-        insertNotification(
+        await insertNotification(
           payment.merchant_id,
           "payment_failed",
           "Settlement failed",
@@ -134,7 +139,7 @@ export async function GET(request: NextRequest) {
           `/dashboard/payments/${payment.id}`
         );
 
-        logAudit({
+        await logAudit({
           merchantId: payment.merchant_id,
           actor: "system",
           action: "settlement.failed",
@@ -152,7 +157,7 @@ export async function GET(request: NextRequest) {
           })
           .eq("id", payment.id);
 
-        dispatchWebhooks(payment.merchant_id, {
+        await dispatchWebhooks(payment.merchant_id, {
           event: "payment.refunded",
           paymentId: payment.id,
           merchantId: payment.merchant_id,
@@ -164,7 +169,7 @@ export async function GET(request: NextRequest) {
           },
         });
 
-        logAudit({
+        await logAudit({
           merchantId: payment.merchant_id,
           actor: "system",
           action: "settlement.refunded",

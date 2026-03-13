@@ -19,16 +19,18 @@ export default async function DashboardLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (user) {
-    const { data: merchant } = await supabase
-      .from("merchants")
-      .select("onboarding_completed")
-      .eq("user_id", user.id)
-      .single();
+  if (!user) {
+    redirect("/login");
+  }
 
-    if (merchant && !merchant.onboarding_completed) {
-      redirect("/dashboard/onboarding");
-    }
+  const { data: merchant } = await supabase
+    .from("merchants")
+    .select("onboarding_completed")
+    .eq("user_id", user.id)
+    .single();
+
+  if (!merchant || !merchant.onboarding_completed) {
+    redirect("/dashboard/onboarding");
   }
 
   return (

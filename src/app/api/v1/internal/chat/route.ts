@@ -1,32 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { processMessage } from "@/lib/chatbot/engine";
+import { checkRateLimit as checkRL } from "@/lib/rate-limit";
 
-// Simple in-request rate limit tracking via headers
-// For production, use a proper store — but this is an internal endpoint behind auth
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(merchantId: string): boolean {
-  const now = Date.now();
-  const window = 60_000; // 1 minute
-  const maxRequests = 30;
-
-  const entry = rateLimitMap.get(merchantId);
-
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(merchantId, { count: 1, resetAt: now + window });
-    return true;
-  }
-
-  if (entry.count >= maxRequests) {
-    return false;
-  }
-
-  entry.count++;
-  return true;
-}
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   const supabase = await createClient();
 
   // Auth: require logged-in merchant
@@ -53,8 +30,9 @@ export async function POST(request: Request) {
     );
   }
 
-  // Rate limit
-  if (!checkRateLimit(merchant.id)) {
+  // Rate limit via Supabase RPC (not in-memory — survives serverless cold starts)
+  const rl = await checkRL(request, "checkout-default", merchant.id);
+  if (!rl.allowed) {
     return NextResponse.json(
       { error: { message: "Too many requests. Please wait a moment." } },
       { status: 429 }

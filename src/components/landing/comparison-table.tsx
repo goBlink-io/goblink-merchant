@@ -81,12 +81,12 @@ export function ComparisonTable() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-zinc-800 bg-zinc-900/50">
-                <th className="text-left py-4 px-6 text-zinc-400 font-medium">Provider</th>
-                <th className="text-center py-4 px-4 text-zinc-400 font-medium">Direct to Wallet</th>
-                <th className="text-center py-4 px-4 text-zinc-400 font-medium">Fees</th>
-                <th className="text-center py-4 px-4 text-zinc-400 font-medium">Settlement</th>
-                <th className="text-center py-4 px-4 text-zinc-400 font-medium">Chains</th>
-                <th className="text-center py-4 px-4 text-zinc-400 font-medium">No Chargebacks</th>
+                <th scope="col" className="text-left py-4 px-6 text-zinc-400 font-medium">Provider</th>
+                <th scope="col" className="text-center py-4 px-4 text-zinc-400 font-medium">Direct to Wallet</th>
+                <th scope="col" className="text-center py-4 px-4 text-zinc-400 font-medium">Fees</th>
+                <th scope="col" className="text-center py-4 px-4 text-zinc-400 font-medium">Settlement</th>
+                <th scope="col" className="text-center py-4 px-4 text-zinc-400 font-medium">Chains</th>
+                <th scope="col" className="text-center py-4 px-4 text-zinc-400 font-medium">No Chargebacks</th>
               </tr>
             </thead>
             <tbody>

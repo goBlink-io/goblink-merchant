@@ -146,6 +146,7 @@ export function Sidebar() {
       {/* Mobile toggle */}
       <button
         onClick={() => setMobileOpen(!mobileOpen)}
+        aria-label="Toggle navigation"
         className="fixed top-4 left-4 z-50 lg:hidden p-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-400 hover:text-white"
       >
         <Menu className="h-5 w-5" />
@@ -154,6 +155,8 @@ export function Sidebar() {
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
+          role="button"
+          aria-label="Close navigation"
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
@@ -183,6 +186,7 @@ export function Sidebar() {
             </Link>
             <button
               onClick={() => setCollapsed(!collapsed)}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
               className="hidden lg:flex p-1 rounded-md text-zinc-500 hover:text-white hover:bg-zinc-800"
             >
               <ChevronLeft

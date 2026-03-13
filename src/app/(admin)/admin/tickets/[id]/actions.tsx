@@ -33,11 +33,15 @@ export function AdminTicketActions({
   async function updateTicket(updates: Record<string, string | null>) {
     setLoading(true);
     try {
-      await fetch(`/api/admin/tickets/${ticketId}`, {
+      const res = await fetch(`/api/admin/tickets/${ticketId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
+      if (!res.ok) {
+        const err = await res.text();
+        alert(`Failed to update ticket: ${err}`);
+      }
       router.refresh();
     } finally {
       setLoading(false);

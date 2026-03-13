@@ -109,6 +109,7 @@ export function useChainBalances({ walletAddress, enabled }: UseChainBalancesOpt
   useEffect(() => {
     if (!enabled || !walletAddress || fetchedRef.current) return;
     fetchedRef.current = true;
+    let mounted = true;
 
     // Check each chain in parallel, updating state as results come in
     CHAIN_CONFIGS.forEach(async (config) => {
@@ -133,6 +134,8 @@ export function useChainBalances({ walletAddress, enabled }: UseChainBalancesOpt
           ),
         ]);
 
+        if (!mounted) return;
+
         // Calculate rough USD total
         const nativeEth = parseFloat(formatEther(nativeBalance));
         const nativePrice = NATIVE_PRICE_FALLBACK[config.nativeSymbol] || 0;
@@ -141,7 +144,9 @@ export function useChainBalances({ walletAddress, enabled }: UseChainBalancesOpt
         config.stablecoins.forEach((sc, i) => {
           const bal = stableResults[i] as bigint;
           if (bal > BigInt(0)) {
-            totalUsd += Number(bal) / 10 ** sc.decimals;
+            // Use BigInt division for large values to avoid precision loss
+            const divisor = BigInt(10 ** sc.decimals);
+            totalUsd += Number(bal / divisor) + Number(bal % divisor) / (10 ** sc.decimals);
           }
         });
 
@@ -155,6 +160,7 @@ export function useChainBalances({ walletAddress, enabled }: UseChainBalancesOpt
           )
         );
       } catch {
+        if (!mounted) return;
         // Mark as loaded but no tokens on error
         setChainBalances((prev) =>
           prev.map((cb) =>
@@ -163,6 +169,8 @@ export function useChainBalances({ walletAddress, enabled }: UseChainBalancesOpt
         );
       }
     });
+
+    return () => { mounted = false; };
   }, [enabled, walletAddress]);
 
   // Reset when wallet changes

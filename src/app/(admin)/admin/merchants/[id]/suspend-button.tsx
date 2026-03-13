@@ -24,6 +24,8 @@ export function SuspendButton({
       });
       if (res.ok) {
         router.refresh();
+      } else {
+        alert("Failed to update merchant status. Please try again.");
       }
     } finally {
       setLoading(false);

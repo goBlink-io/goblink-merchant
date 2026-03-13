@@ -34,7 +34,8 @@ export async function GET(request: NextRequest) {
     .from("payments")
     .select("*")
     .eq("status", "processing")
-    .not("deposit_address", "is", null);
+    .not("deposit_address", "is", null)
+    .limit(100); // Bound query to prevent serverless timeout
 
   if (fetchErr) {
     console.error("[settle-payments] Failed to fetch processing payments:", fetchErr.message);
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        dispatchWebhooks(payment.merchant_id, {
+        await dispatchWebhooks(payment.merchant_id, {
           event: "payment.confirmed",
           paymentId: payment.id,
           merchantId: payment.merchant_id,
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
           },
         });
 
-        insertNotification(
+        await insertNotification(
           payment.merchant_id,
           "payment_received",
           "Payment received",
@@ -116,7 +117,7 @@ export async function GET(request: NextRequest) {
 
         // P2-E: Send customer receipt email if customer_email is set
         if (payment.customer_email) {
-          sendCustomerReceiptEmail(payment, fulfillmentTxHash ?? null).catch((err) => {
+          await sendCustomerReceiptEmail(payment, fulfillmentTxHash ?? null).catch((err) => {
             console.error(`[settle-payments] Failed to send customer receipt for ${payment.id}:`, err);
           });
         }
@@ -136,7 +137,7 @@ export async function GET(request: NextRequest) {
             .update({ first_payment_celebrated: true })
             .eq("id", payment.merchant_id);
 
-          insertNotification(
+          await insertNotification(
             payment.merchant_id,
             "first_payment",
             "\u{1F389} Your first payment just landed!",
@@ -159,7 +160,7 @@ export async function GET(request: NextRequest) {
                 .update({ status: "active", activated_at: new Date().toISOString() })
                 .eq("id", referral.id);
 
-              insertNotification(
+              await insertNotification(
                 referral.referrer_id,
                 "referral",
                 "Referral activated!",
@@ -227,7 +228,7 @@ export async function GET(request: NextRequest) {
           for (const key of newMilestones) {
             const info = MILESTONE_LABELS[key];
             if (info) {
-              insertNotification(
+              await insertNotification(
                 payment.merchant_id,
                 "milestone",
                 info.title,
@@ -253,7 +254,7 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        dispatchWebhooks(payment.merchant_id, {
+        await dispatchWebhooks(payment.merchant_id, {
           event: "payment.failed",
           paymentId: payment.id,
           merchantId: payment.merchant_id,
@@ -266,7 +267,7 @@ export async function GET(request: NextRequest) {
           },
         });
 
-        insertNotification(
+        await insertNotification(
           payment.merchant_id,
           "payment_failed",
           "Payment failed",
@@ -295,7 +296,7 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        dispatchWebhooks(payment.merchant_id, {
+        await dispatchWebhooks(payment.merchant_id, {
           event: "payment.refunded",
           paymentId: payment.id,
           merchantId: payment.merchant_id,
@@ -336,7 +337,8 @@ export async function GET(request: NextRequest) {
     .select("id, merchant_id, amount, currency")
     .eq("status", "pending")
     .not("expires_at", "is", null)
-    .lt("expires_at", new Date().toISOString());
+    .lt("expires_at", new Date().toISOString())
+    .limit(200); // Bound query to prevent serverless timeout
 
   if (!expireErr && expiredPayments) {
     for (const payment of expiredPayments) {
@@ -351,7 +353,7 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      dispatchWebhooks(payment.merchant_id, {
+      await dispatchWebhooks(payment.merchant_id, {
         event: "payment.expired",
         paymentId: payment.id,
         merchantId: payment.merchant_id,

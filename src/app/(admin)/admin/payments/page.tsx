@@ -105,7 +105,7 @@ async function PaymentsTable({
                 <div className="flex gap-2">
                   {page > 1 && (
                     <a
-                      href={`/admin/payments?page=${page - 1}${searchParams.status ? `&status=${searchParams.status}` : ""}${searchParams.search ? `&search=${searchParams.search}` : ""}`}
+                      href={(() => { const p = new URLSearchParams(); for (const [k, v] of Object.entries(searchParams)) { if (v !== undefined && v !== "") p.set(k, v); } p.set("page", String(page - 1)); return `/admin/payments?${p.toString()}`; })()}
                       className="text-sm text-blue-400 hover:text-blue-300"
                     >
                       Previous
@@ -113,7 +113,7 @@ async function PaymentsTable({
                   )}
                   {page < totalPages && (
                     <a
-                      href={`/admin/payments?page=${page + 1}${searchParams.status ? `&status=${searchParams.status}` : ""}${searchParams.search ? `&search=${searchParams.search}` : ""}`}
+                      href={(() => { const p = new URLSearchParams(); for (const [k, v] of Object.entries(searchParams)) { if (v !== undefined && v !== "") p.set(k, v); } p.set("page", String(page + 1)); return `/admin/payments?${p.toString()}`; })()}
                       className="text-sm text-blue-400 hover:text-blue-300"
                     >
                       Next

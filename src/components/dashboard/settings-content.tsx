@@ -151,11 +151,13 @@ function ProfileSettings({ merchant }: { merchant: Merchant }) {
   const [timezone, setTimezone] = useState(merchant.timezone);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(false);
     const { error } = await supabase
       .from("merchants")
       .update({
@@ -171,6 +173,9 @@ function ProfileSettings({ merchant }: { merchant: Merchant }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       router.refresh();
+    } else {
+      setSaveError(true);
+      setTimeout(() => setSaveError(false), 5000);
     }
   }
 
@@ -256,6 +261,9 @@ function ProfileSettings({ merchant }: { merchant: Merchant }) {
           {saved && (
             <span className="text-sm text-emerald-400">Changes saved!</span>
           )}
+          {saveError && (
+            <span className="text-sm text-red-400">Failed to save. Please try again.</span>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -268,11 +276,13 @@ function BrandingSettings({ merchant }: { merchant: Merchant }) {
   const [showPoweredBadge, setShowPoweredBadge] = useState(merchant.show_powered_badge ?? true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(false);
     const { error } = await supabase
       .from("merchants")
       .update({
@@ -287,6 +297,9 @@ function BrandingSettings({ merchant }: { merchant: Merchant }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       router.refresh();
+    } else {
+      setSaveError(true);
+      setTimeout(() => setSaveError(false), 5000);
     }
   }
 
@@ -358,6 +371,9 @@ function BrandingSettings({ merchant }: { merchant: Merchant }) {
               </Button>
               {saved && (
                 <span className="text-sm text-emerald-400">Branding saved!</span>
+              )}
+              {saveError && (
+                <span className="text-sm text-red-400">Failed to save. Please try again.</span>
               )}
             </div>
           </div>
@@ -437,11 +453,13 @@ function PaymentSettings({ merchant }: { merchant: Merchant }) {
   const [settlementChain, setSettlementChain] = useState(merchant.settlement_chain);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(false);
     const { error } = await supabase
       .from("merchants")
       .update({
@@ -456,6 +474,9 @@ function PaymentSettings({ merchant }: { merchant: Merchant }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       router.refresh();
+    } else {
+      setSaveError(true);
+      setTimeout(() => setSaveError(false), 5000);
     }
   }
 
@@ -521,6 +542,9 @@ function PaymentSettings({ merchant }: { merchant: Merchant }) {
           {saved && (
             <span className="text-sm text-emerald-400">Changes saved!</span>
           )}
+          {saveError && (
+            <span className="text-sm text-red-400">Failed to save. Please try again.</span>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -533,6 +557,7 @@ function CheckoutFieldsSettings({ merchant }: { merchant: Merchant }) {
   );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -560,6 +585,7 @@ function CheckoutFieldsSettings({ merchant }: { merchant: Merchant }) {
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(false);
     const { error } = await supabase
       .from("merchants")
       .update({ custom_checkout_fields: fields })
@@ -570,6 +596,9 @@ function CheckoutFieldsSettings({ merchant }: { merchant: Merchant }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       router.refresh();
+    } else {
+      setSaveError(true);
+      setTimeout(() => setSaveError(false), 5000);
     }
   }
 
@@ -605,7 +634,7 @@ function CheckoutFieldsSettings({ merchant }: { merchant: Merchant }) {
           ) : (
             fields.map((field, index) => (
               <div
-                key={index}
+                key={`field-${index}-${field.label}`}
                 className="rounded-lg bg-zinc-800/30 border border-zinc-800 p-4 space-y-3"
               >
                 <div className="flex items-center justify-between">
@@ -708,6 +737,9 @@ function CheckoutFieldsSettings({ merchant }: { merchant: Merchant }) {
               {saved && (
                 <span className="text-sm text-emerald-400">Fields saved!</span>
               )}
+              {saveError && (
+                <span className="text-sm text-red-400">Failed to save. Please try again.</span>
+              )}
             </div>
           )}
         </CardContent>
@@ -723,7 +755,7 @@ function CheckoutFieldsSettings({ merchant }: { merchant: Merchant }) {
           <CardContent>
             <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-6 space-y-4 max-w-md">
               {fields.map((field, index) => (
-                <div key={index} className="space-y-1.5">
+                <div key={`preview-${index}-${field.label}`} className="space-y-1.5">
                   <label className="text-sm text-zinc-300">
                     {field.label || "Untitled"}
                     {field.required && <span className="text-red-400 ml-1">*</span>}
@@ -921,6 +953,7 @@ function ApiKeySettings({
   }
 
   async function handleDeleteKey(keyId: string) {
+    if (!confirm("Are you sure you want to delete this API key?")) return;
     const res = await fetch("/api/v1/internal/api-keys", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -1257,6 +1290,7 @@ function WebhookSettings({
   }
 
   async function handleDeleteWebhook(webhookId: string) {
+    if (!confirm("Are you sure you want to delete this webhook?")) return;
     const res = await fetch("/api/v1/internal/webhooks", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -1482,6 +1516,7 @@ function NotificationSettings({
   const [prefs, setPrefs] = useState<NotificationPreferences>(preferences);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -1491,6 +1526,7 @@ function NotificationSettings({
 
   async function handleSave() {
     setSaving(true);
+    setSaveError(false);
     const { error } = await supabase
       .from("merchants")
       .update({ notification_preferences: prefs })
@@ -1501,6 +1537,9 @@ function NotificationSettings({
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       router.refresh();
+    } else {
+      setSaveError(true);
+      setTimeout(() => setSaveError(false), 5000);
     }
   }
 
@@ -1540,6 +1579,9 @@ function NotificationSettings({
           </Button>
           {saved && (
             <span className="text-sm text-emerald-400">Preferences saved!</span>
+          )}
+          {saveError && (
+            <span className="text-sm text-red-400">Failed to save. Please try again.</span>
           )}
         </div>
       </CardContent>

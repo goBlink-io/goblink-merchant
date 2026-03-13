@@ -25,7 +25,8 @@ export default async function PaymentsPage({
 
   if (!merchant) redirect("/login");
 
-  const page = parseInt(params.page || "1", 10);
+  const parsedPage = parseInt(params.page || "1", 10);
+  const page = Number.isFinite(parsedPage) && parsedPage >= 1 ? parsedPage : 1;
   const perPage = 20;
   const offset = (page - 1) * perPage;
   const isTest = params.is_test === "true";
@@ -45,7 +46,8 @@ export default async function PaymentsPage({
 
   // Search by order ID or tx hash
   if (params.search) {
-    const sanitized = params.search.replace(/[,.*()]/g, "");
+    const sanitized = params.search.replace(/[,.*()%_\\;'"]/g, "").slice(0, 100);
+    if (!sanitized) { /* skip empty search */ }
     const term = `%${sanitized}%`;
     const uuidMatch = isUUID(sanitized) ? sanitized : "00000000-0000-0000-0000-000000000000";
     query = query.or(

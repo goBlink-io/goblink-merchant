@@ -50,7 +50,7 @@ interface PaymentsListProps {
 }
 
 function formatConverted(amountUsd: number, displayCurrency: string, exchangeRate: number): string {
-  if (displayCurrency === "USD" || exchangeRate === 1) {
+  if (displayCurrency === "USD" || exchangeRate === 1 || !exchangeRate) {
     return formatCurrency(amountUsd, "USD");
   }
   return formatCurrency(amountUsd * exchangeRate, displayCurrency);
@@ -115,7 +115,7 @@ export function PaymentsList({
         is_test: Boolean(record.is_test),
       };
 
-      setLivePayments((prev) => [newPayment, ...prev]);
+      setLivePayments((prev) => [newPayment, ...prev].slice(0, perPage));
 
       // Highlight the new row briefly
       setHighlightedIds((prev) => new Set(prev).add(record.id));
@@ -164,19 +164,19 @@ export function PaymentsList({
     };
   }, []);
 
-  // Sync test mode context with URL param
+  // Sync test mode context with URL param (only on test mode toggle, not on URL change)
+  const prevTestMode = useRef(isTestMode);
   useEffect(() => {
-    const currentIsTest = searchParams.get("is_test") === "true";
-    if (currentIsTest !== isTestMode) {
-      const params = new URLSearchParams(searchParams.toString());
-      if (isTestMode) {
-        params.set("is_test", "true");
-      } else {
-        params.delete("is_test");
-      }
-      params.delete("page");
-      router.push(`/dashboard/payments?${params.toString()}`);
+    if (prevTestMode.current === isTestMode) return;
+    prevTestMode.current = isTestMode;
+    const params = new URLSearchParams(searchParams.toString());
+    if (isTestMode) {
+      params.set("is_test", "true");
+    } else {
+      params.delete("is_test");
     }
+    params.delete("page");
+    router.push(`/dashboard/payments?${params.toString()}`);
   }, [isTestMode, searchParams, router]);
 
   const totalPages = Math.ceil(totalCount / perPage);

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useEffect } from "react";
 import { useWalletContext } from "@/contexts/WalletContext";
 import { useConnectWallet as useSuiConnect, useWallets as useSuiWallets } from "@mysten/dapp-kit";
 import { useWallet as useAptosWallet } from "@aptos-labs/wallet-adapter-react";
@@ -130,8 +131,10 @@ function AptosOptions({ onConnected }: { onConnected: () => void }) {
           key={w.name}
           name={w.name}
           onClick={async () => {
-            await connect(w.name as never);
-            onConnected();
+            try {
+              await connect(w.name as never);
+              onConnected();
+            } catch { /* user rejected */ }
           }}
         />
       ))}
@@ -151,9 +154,11 @@ function StarknetOptions({ onConnected }: { onConnected: () => void }) {
         <WalletButton
           key={c.id}
           name={c.name}
-          onClick={() => {
-            connect({ connector: c });
-            onConnected();
+          onClick={async () => {
+            try {
+              await connect({ connector: c });
+              onConnected();
+            } catch { /* user rejected */ }
           }}
         />
       ))}
@@ -169,8 +174,11 @@ function TonOptions({ onConnected }: { onConnected: () => void }) {
       <WalletButton
         name="TON Wallet"
         onClick={async () => {
-          await tonConnectUI.openModal();
-          onConnected();
+          // TON modal is async — subscribe to status change
+          tonConnectUI.openModal();
+          const unsub = tonConnectUI.onStatusChange((w) => {
+            if (w) { onConnected(); unsub(); }
+          });
         }}
       />
     </div>
@@ -178,7 +186,16 @@ function TonOptions({ onConnected }: { onConnected: () => void }) {
 }
 
 function TronOptions({ onConnected }: { onConnected: () => void }) {
-  const { wallets, select } = useTronWallet();
+  const { wallets, select, connected } = useTronWallet();
+
+  // Watch for connection to actually complete
+  const pendingRef = useRef(false);
+  useEffect(() => {
+    if (pendingRef.current && connected) {
+      pendingRef.current = false;
+      onConnected();
+    }
+  }, [connected, onConnected]);
 
   return (
     <div className="space-y-2">
@@ -187,8 +204,8 @@ function TronOptions({ onConnected }: { onConnected: () => void }) {
           key={w.adapter.name}
           name={w.adapter.name}
           onClick={() => {
+            pendingRef.current = true;
             select(w.adapter.name);
-            onConnected();
           }}
         />
       ))}

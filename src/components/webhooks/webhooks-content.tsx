@@ -35,8 +35,6 @@ import {
   Trash2,
   Play,
   Loader2,
-  Eye,
-  EyeOff,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -47,7 +45,6 @@ import { formatDate } from "@/lib/utils";
 interface WebhookEndpoint {
   id: string;
   url: string;
-  secret: string;
   events: string[];
   is_active: boolean;
   created_at: string;
@@ -137,6 +134,7 @@ function EndpointsSection({
   }
 
   async function handleDelete(webhookId: string) {
+    if (!confirm("Delete this webhook endpoint? This cannot be undone.")) return;
     const res = await fetch("/api/v1/internal/webhooks", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -286,7 +284,6 @@ function EndpointRow({
   onTest: () => void;
   onDelete: () => void;
 }) {
-  const [secretVisible, setSecretVisible] = useState(false);
 
   return (
     <div className="rounded-lg bg-zinc-800/30 border border-zinc-800 p-4 space-y-3">
@@ -336,24 +333,9 @@ function EndpointRow({
         </div>
       </div>
 
-      {/* Signing secret */}
+      {/* Signing secret notice */}
       <div className="flex items-center gap-2 bg-zinc-900/60 rounded-md px-3 py-2">
-        <span className="text-xs text-zinc-500 shrink-0">Signing secret:</span>
-        <code className="text-xs text-zinc-300 font-mono flex-1 truncate">
-          {secretVisible ? endpoint.secret : "\u2022".repeat(40)}
-        </code>
-        <button
-          onClick={() => setSecretVisible(!secretVisible)}
-          className="text-zinc-500 hover:text-zinc-300 shrink-0"
-          title={secretVisible ? "Hide" : "Reveal"}
-        >
-          {secretVisible ? (
-            <EyeOff className="h-3.5 w-3.5" />
-          ) : (
-            <Eye className="h-3.5 w-3.5" />
-          )}
-        </button>
-        <CopyButton value={endpoint.secret} />
+        <span className="text-xs text-zinc-500">Signing secret was shown when this endpoint was created. Rotate it to get a new one.</span>
       </div>
 
       {/* Test result */}

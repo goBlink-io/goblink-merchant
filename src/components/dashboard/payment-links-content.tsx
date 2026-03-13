@@ -76,6 +76,7 @@ export function PaymentLinksContent({
   const [shareLink, setShareLink] = useState<PaymentLink | null>(null);
 
   // Copy state
+  const [createError, setCreateError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const filteredLinks = initialLinks.filter((link) => {
@@ -104,6 +105,7 @@ export function PaymentLinksContent({
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) return;
 
     setCreating(true);
+    setCreateError(null);
     try {
       const res = await fetch("/api/v1/internal/payment-links", {
         method: "POST",
@@ -121,7 +123,11 @@ export function PaymentLinksContent({
         setAmount("");
         setMemo("");
         setExpiresInHours("24");
+        setCreateError(null);
         router.refresh();
+      } else {
+        const body = await res.json().catch(() => null);
+        setCreateError(body?.error ?? `Failed to create payment link (${res.status}).`);
       }
     } finally {
       setCreating(false);
@@ -348,6 +354,10 @@ export function PaymentLinksContent({
               </Select>
             </div>
           </div>
+
+          {createError && (
+            <p className="text-sm text-red-400">{createError}</p>
+          )}
 
           <DialogFooter>
             <Button

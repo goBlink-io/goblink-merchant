@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
     recentPayments: recentPayments ?? [],
     currency: merchant.currency,
     displayCurrency,
-    exchangeRate: exchangeRate ?? 1,
+    exchangeRate: exchangeRate ?? null,
     settlementToken: merchant.settlement_token,
     settlementChain: merchant.settlement_chain,
     businessName: merchant.business_name,

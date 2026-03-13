@@ -69,15 +69,15 @@ export async function GET(request: NextRequest) {
   }
 
   const dc = merchant.display_currency || "USD";
-  const rate = (await getExchangeRate(dc)) ?? 1;
-  const showDc = dc !== "USD";
+  const rate = await getExchangeRate(dc);
+  const showDc = dc !== "USD" && rate !== null;
 
   if (format === "json") {
     const enriched = (payments ?? []).map((p) => ({
       ...p,
       ...(showDc
         ? {
-            display_amount: formatCurrencyAmount(Number(p.amount) * rate, dc),
+            display_amount: formatCurrencyAmount(Number(p.amount) * rate!, dc),
             display_currency: dc,
           }
         : {}),
@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
     p.id,
     new Date(p.created_at).toISOString(),
     p.amount,
-    ...(showDc ? [formatCurrencyAmount(Number(p.amount) * rate, dc)] : []),
+    ...(showDc ? [formatCurrencyAmount(Number(p.amount) * rate!, dc)] : []),
     p.currency,
     p.crypto_token || "",
     p.crypto_chain || "",

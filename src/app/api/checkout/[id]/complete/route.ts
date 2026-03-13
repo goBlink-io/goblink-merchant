@@ -154,8 +154,8 @@ export async function POST(
     return withCors(request, apiError("Failed to update payment", 500));
   }
 
-  // Dispatch webhook
-  dispatchWebhooks(payment.merchant_id, {
+  // Dispatch webhook — must await in serverless to ensure delivery
+  await dispatchWebhooks(payment.merchant_id, {
     event: "payment.processing",
     paymentId: id,
     merchantId: payment.merchant_id,
@@ -171,7 +171,7 @@ export async function POST(
     },
   });
 
-  logAudit({
+  await logAudit({
     merchantId: payment.merchant_id,
     actor: "checkout",
     action: "payment.processing",
@@ -263,9 +263,9 @@ export async function PATCH(
     return apiError("Failed to update payment", 500);
   }
 
-  // Dispatch webhook
+  // Dispatch webhook — must await in serverless to ensure delivery
   const event = outcome === "confirmed" ? "payment.confirmed" : "payment.failed";
-  dispatchWebhooks(payment.merchant_id, {
+  await dispatchWebhooks(payment.merchant_id, {
     event,
     paymentId: id,
     merchantId: payment.merchant_id,
@@ -278,7 +278,7 @@ export async function PATCH(
     },
   });
 
-  logAudit({
+  await logAudit({
     merchantId: payment.merchant_id,
     actor: "system",
     action: `payment.${outcome}`,

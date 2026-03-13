@@ -30,7 +30,7 @@ async function ConversionStats() {
   const growth = totalVolumeFirst15 > 0
     ? ((totalVolumeLast15 - totalVolumeFirst15) / totalVolumeFirst15 * 100)
     : 0;
-  const avgPaymentSize = conv.created > 0 ? totalVolumeLast30 / conv.confirmed : 0;
+  const avgPaymentSize = conv.confirmed > 0 ? totalVolumeLast30 / conv.confirmed : 0;
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

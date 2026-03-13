@@ -17,6 +17,11 @@ import { haptic } from "@/lib/haptics";
 
 const CURRENCIES = ["USD", "EUR", "GBP", "CAD", "AUD", "JPY", "CHF", "SGD", "HKD", "MXN"];
 
+/** Escape HTML special chars to prevent XSS in generated snippets */
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 interface ButtonGeneratorProps {
   merchantId: string;
 }
@@ -32,15 +37,19 @@ export function ButtonGenerator({ merchantId }: ButtonGeneratorProps) {
   const bg = style === "primary" ? "#2563eb" : "#27272a";
   const payUrl = `https://merchant.goblink.io/pay/new?merchant=${merchantId}&amount=${amount || "0"}&currency=${currency}`;
 
-  const htmlSnippet = `<a href="${payUrl}" style="display:inline-block;padding:12px 24px;background:${bg};color:white;border-radius:8px;text-decoration:none;font-family:sans-serif;font-weight:600">${label}</a>`;
+  const safeLabel = escapeHtml(label);
+  const safeAmount = escapeHtml(amount || "0");
+  const htmlSnippet = `<a href="${escapeHtml(payUrl)}" style="display:inline-block;padding:12px 24px;background:${bg};color:white;border-radius:8px;text-decoration:none;font-family:sans-serif;font-weight:600">${safeLabel}</a>`;
 
-  const jsSnippet = `<script src="https://merchant.goblink.io/embed.js" data-merchant="${merchantId}" data-amount="${amount || "0"}" data-currency="${currency}" data-label="${label}"${style === "dark" ? ' data-style="dark"' : ""}></script>`;
+  const jsSnippet = `<script src="https://merchant.goblink.io/embed.js" data-merchant="${escapeHtml(merchantId)}" data-amount="${safeAmount}" data-currency="${escapeHtml(currency)}" data-label="${safeLabel}"${style === "dark" ? ' data-style="dark"' : ""}></script>`;
 
-  function copySnippet(text: string, setter: (v: boolean) => void) {
-    navigator.clipboard.writeText(text);
-    haptic("tap");
-    setter(true);
-    setTimeout(() => setter(false), 2000);
+  async function copySnippet(text: string, setter: (v: boolean) => void) {
+    try {
+      await navigator.clipboard.writeText(text);
+      haptic("tap");
+      setter(true);
+      setTimeout(() => setter(false), 2000);
+    } catch { /* clipboard denied */ }
   }
 
   return (

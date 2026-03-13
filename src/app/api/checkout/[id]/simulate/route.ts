@@ -66,7 +66,7 @@ export async function POST(
       })
       .eq("id", id);
 
-    dispatchWebhooks(payment.merchant_id, {
+    await dispatchWebhooks(payment.merchant_id, {
       event: "payment.processing",
       paymentId: id,
       merchantId: payment.merchant_id,
@@ -99,8 +99,8 @@ export async function POST(
     return withCors(request, apiError("Failed to confirm test payment", 500));
   }
 
-  // Dispatch confirmed webhook
-  dispatchWebhooks(payment.merchant_id, {
+  // Dispatch confirmed webhook — must await in serverless
+  await dispatchWebhooks(payment.merchant_id, {
     event: "payment.confirmed",
     paymentId: id,
     merchantId: payment.merchant_id,
@@ -114,7 +114,7 @@ export async function POST(
     },
   });
 
-  logAudit({
+  await logAudit({
     merchantId: payment.merchant_id,
     actor: "test-simulate",
     action: "payment.test_confirmed",

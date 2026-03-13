@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { RefundsContent } from "@/components/dashboard/refunds-content";
-import { getServiceClient } from "@/lib/service-client";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +20,7 @@ export default async function RefundsPage() {
   if (!merchant) redirect("/login");
 
   // Fetch initial refunds
-  const serviceClient = getServiceClient();
-  const { data: refunds } = await serviceClient
+  const { data: refunds } = await supabase
     .from("refunds")
     .select("*")
     .eq("merchant_id", merchant.id)
