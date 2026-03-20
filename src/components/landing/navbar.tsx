@@ -31,7 +31,7 @@ export function Navbar() {
             <a href="#pricing" className="text-sm text-zinc-400 hover:text-white transition-colors">
               Pricing
             </a>
-            <a href="#" className="text-sm text-zinc-400 hover:text-white transition-colors">
+            <a href="https://docs.goblink.io" target="_blank" rel="noopener noreferrer" className="text-sm text-zinc-400 hover:text-white transition-colors">
               Docs
             </a>
           </div>
@@ -76,7 +76,7 @@ export function Navbar() {
             >
               Pricing
             </a>
-            <a href="#" className="block text-sm text-zinc-400 hover:text-white py-2">
+            <a href="https://docs.goblink.io" target="_blank" rel="noopener noreferrer" className="block text-sm text-zinc-400 hover:text-white py-2">
               Docs
             </a>
             <div className="pt-3 border-t border-zinc-800 flex flex-col gap-2">
