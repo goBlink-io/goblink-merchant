@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -159,28 +159,16 @@ export default function AdminTemplateEditorPage() {
     setHasChanges(changed);
   }, [subject, bodyHtml, bodyText, isActive, template]);
 
-  // Update preview iframe
-  const updatePreview = useCallback(() => {
-    if (!iframeRef.current || !template) return;
+  // Build preview HTML as srcdoc (sandboxed, no script execution)
+  const previewSrcdoc = useMemo(() => {
+    if (!template) return "";
     const vars = sampleVariables[template.type] || {};
     const rendered = renderPreview(bodyHtml, vars);
-    const doc = iframeRef.current.contentDocument;
-    if (doc) {
-      doc.open();
-      doc.write(rendered);
-      doc.close();
-      if (doc.body) {
-        doc.body.style.margin = "0";
-        if (!darkPreview) {
-          doc.body.style.backgroundColor = "#ffffff";
-        }
-      }
-    }
+    const bgColor = darkPreview ? "#09090b" : "#ffffff";
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{margin:0;background:${bgColor}}</style></head><body>${rendered}</body></html>`;
   }, [bodyHtml, template, darkPreview]);
 
-  useEffect(() => {
-    updatePreview();
-  }, [updatePreview]);
+  // (preview is now rendered via srcdoc, no imperative update needed)
 
   function showToast(msg: string) {
     setToast(msg);
@@ -416,7 +404,8 @@ export default function AdminTemplateEditorPage() {
                 title="Email Preview"
                 className="w-full border-0"
                 style={{ height: "600px" }}
-                sandbox="allow-same-origin"
+                sandbox=""
+                srcDoc={previewSrcdoc}
               />
             </div>
           </div>

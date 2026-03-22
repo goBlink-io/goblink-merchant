@@ -22,7 +22,7 @@ export default async function WebhooksPage() {
 
   const { data: webhooks } = await supabase
     .from("webhook_endpoints")
-    .select("id, url, secret, events, is_active, created_at")
+    .select("id, url, events, is_active, created_at")
     .eq("merchant_id", merchant.id)
     .order("created_at", { ascending: false });
 

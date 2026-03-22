@@ -70,8 +70,10 @@ function ExportCard({
   const [endDate, setEndDate] = useState(defaults.end);
   const [format, setFormat] = useState("csv");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleExport() {
+    setError(null);
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -103,8 +105,8 @@ function ExportCard({
         date: new Date().toISOString(),
         range: `${startDate} to ${endDate}`,
       });
-    } catch {
-      // silently fail
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Export failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -156,6 +158,9 @@ function ExportCard({
             </SelectContent>
           </Select>
         </div>
+        {error && (
+          <p className="text-sm text-red-400">{error}</p>
+        )}
         <Button onClick={handleExport} disabled={loading} className="w-full">
           <Download className="h-4 w-4 mr-2" />
           {loading ? "Exporting..." : "Download"}

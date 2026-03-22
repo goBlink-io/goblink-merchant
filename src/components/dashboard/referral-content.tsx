@@ -28,26 +28,35 @@ interface ReferralData {
 export function ReferralContent() {
   const [data, setData] = useState<ReferralData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
 
   const fetchReferrals = useCallback(async () => {
-    const res = await fetch("/api/v1/internal/referrals");
-    if (res.ok) {
-      const json = await res.json();
-      setData(json);
-      // Auto-generate referral code if missing
-      if (!json.referralCode) {
-        setGenerating(true);
-        const postRes = await fetch("/api/v1/internal/referrals", { method: "POST" });
-        if (postRes.ok) {
-          const postJson = await postRes.json();
-          setData((prev) => prev ? { ...prev, referralCode: postJson.referralCode } : prev);
+    try {
+      setError(null);
+      const res = await fetch("/api/v1/internal/referrals");
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+        // Auto-generate referral code if missing
+        if (!json.referralCode) {
+          setGenerating(true);
+          const postRes = await fetch("/api/v1/internal/referrals", { method: "POST" });
+          if (postRes.ok) {
+            const postJson = await postRes.json();
+            setData((prev) => prev ? { ...prev, referralCode: postJson.referralCode } : prev);
+          }
+          setGenerating(false);
         }
-        setGenerating(false);
+      } else {
+        setError("Failed to load referrals.");
       }
+    } catch {
+      setError("Failed to load referrals. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -107,6 +116,10 @@ export function ReferralContent() {
         <h1 className="text-2xl font-bold text-white">Referrals</h1>
         <p className="text-zinc-400 text-sm mt-1">Invite merchants and earn rewards</p>
       </div>
+
+      {error && (
+        <p className="text-sm text-red-400">{error}</p>
+      )}
 
       {/* Referral link card */}
       <Card className="bg-zinc-900/50 border-zinc-800">

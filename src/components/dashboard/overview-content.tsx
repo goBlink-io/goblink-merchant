@@ -67,7 +67,7 @@ interface MilestoneRecord {
 }
 
 function formatConverted(amountUsd: number, displayCurrency: string, exchangeRate: number): string {
-  if (displayCurrency === "USD" || exchangeRate === 1) {
+  if (displayCurrency === "USD" || exchangeRate === 1 || !exchangeRate) {
     return formatCurrency(amountUsd, "USD");
   }
   return formatCurrency(amountUsd * exchangeRate, displayCurrency);
@@ -157,8 +157,8 @@ export function OverviewContent({ data }: { data: OverviewData }) {
 
       setFiltered((prev) => ({
         ...prev,
-        totalPayments: prev.totalPayments + 1,
-        todayRevenue: prev.todayRevenue + Number(record.amount),
+        totalPayments: record.status === "confirmed" ? prev.totalPayments + 1 : prev.totalPayments,
+        todayRevenue: record.status === "confirmed" ? prev.todayRevenue + Number(record.amount) : prev.todayRevenue,
         pendingCount:
           record.status === "pending" || record.status === "processing"
             ? prev.pendingCount + 1

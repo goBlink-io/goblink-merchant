@@ -21,7 +21,7 @@ export default async function DashboardPage() {
 
   // Get today's start in UTC
   const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  todayStart.setUTCHours(0, 0, 0, 0);
 
   // Default: fetch live (non-test) data for SSR
   const { data: recentPayments } = await supabase

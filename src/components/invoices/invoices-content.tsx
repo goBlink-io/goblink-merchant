@@ -176,6 +176,7 @@ export function InvoicesContent({
   }
 
   async function handleDelete(invoiceId: string) {
+    if (!confirm("Delete this invoice? This cannot be undone.")) return;
     setActionLoading(invoiceId);
     try {
       const res = await fetch(`/api/v1/internal/invoices/${invoiceId}`, {
@@ -623,7 +624,7 @@ function CreateInvoiceDialog({
 
               return (
                 <div
-                  key={index}
+                  key={`${item.description}-${index}`}
                   className="grid grid-cols-12 gap-2 items-center"
                 >
                   <div className="col-span-12 sm:col-span-5">

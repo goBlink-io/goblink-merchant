@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useReadContracts, useBalance, useAccount } from "wagmi";
 import { formatUnits, erc20Abi, type Address } from "viem";
 
@@ -80,11 +80,18 @@ export function useTokenBalances({
       : 1
     : undefined;
 
-  // Separate native and ERC-20 tokens
-  const nativeToken = isEvm ? tokens.find(isNativeToken) : null;
-  const erc20Tokens = isEvm
-    ? tokens.filter((t) => !isNativeToken(t) && t.address && t.address.length > 8)
-    : [];
+  // Separate native and ERC-20 tokens (memoized to prevent infinite loops)
+  const nativeToken = useMemo(
+    () => (isEvm ? tokens.find(isNativeToken) : null),
+    [isEvm, tokens]
+  );
+  const erc20Tokens = useMemo(
+    () =>
+      isEvm
+        ? tokens.filter((t) => !isNativeToken(t) && t.address && t.address.length > 8)
+        : [],
+    [isEvm, tokens]
+  );
 
   // Native token balance
   const { data: nativeBalance } = useBalance({
@@ -139,14 +146,24 @@ export function useTokenBalances({
       });
     }
 
-    // Only update if the balances actually changed
+    // Only update if the token set or results changed
     const tokenIds = tokens.map((t) => t.defuse_asset_id).join(",");
-    if (tokenIds !== prevTokenIdsRef.current || newBalances.size > 0) {
+    if (tokenIds !== prevTokenIdsRef.current) {
       prevTokenIdsRef.current = tokenIds;
       setBalances(newBalances);
-      setLoading(false);
+    } else if (newBalances.size > 0) {
+      // Compare actual values to avoid unnecessary re-renders
+      let changed = newBalances.size !== balances.size;
+      if (!changed) {
+        for (const [key, val] of newBalances) {
+          const prev = balances.get(key);
+          if (!prev || prev.balance !== val.balance) { changed = true; break; }
+        }
+      }
+      if (changed) setBalances(newBalances);
     }
-  }, [enabled, isEvm, walletAddress, nativeToken, nativeBalance, erc20Results, erc20Tokens, tokens]);
+    setLoading(false);
+  }, [enabled, isEvm, walletAddress, nativeToken, nativeBalance, erc20Results, erc20Tokens, tokens, balances]);
 
   // Set loading when tokens change
   useEffect(() => {

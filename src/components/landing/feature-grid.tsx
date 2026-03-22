@@ -1,4 +1,4 @@
-import { Shield, Globe, Zap, Palette, FileText, Code } from "lucide-react";
+import { Shield, Globe, Zap, Palette, Bell, Code } from "lucide-react";
 
 const features = [
   {
@@ -9,9 +9,9 @@ const features = [
   },
   {
     icon: Globe,
-    title: "Cross-Chain (12 Chains)",
+    title: "Multi-Chain Support",
     description:
-      "Accept payments on Ethereum, Solana, Base, Polygon, Arbitrum, and 20+ more chains.",
+      "Accept payments on Ethereum, Solana, Base, Polygon, Arbitrum, and more chains.",
   },
   {
     icon: Zap,
@@ -21,15 +21,15 @@ const features = [
   },
   {
     icon: Palette,
-    title: "Branded Checkout",
+    title: "Instant Checkout",
     description:
-      "Customizable payment pages that match your brand. Your logo, your colors, your domain.",
+      "Simple, fast payment flow for your customers. Generate a payment, share the link, get paid.",
   },
   {
-    icon: FileText,
-    title: "Invoicing & POS",
+    icon: Bell,
+    title: "Webhook Alerts",
     description:
-      "Send professional invoices and accept in-person payments with our point-of-sale mode.",
+      "Real-time webhook notifications with HMAC-SHA256 signing and automatic retries. Never miss a payment.",
   },
   {
     icon: Code,

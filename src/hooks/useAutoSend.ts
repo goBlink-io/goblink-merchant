@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useSendTransaction, useWriteContract, useAccount, usePublicClient } from "wagmi";
-import { parseUnits, erc20Abi, type Address } from "viem";
+import { erc20Abi, type Address } from "viem";
 
 interface Token {
   defuse_asset_id: string;
@@ -49,6 +49,12 @@ export function useAutoSend({ paymentId, chainId, customerEmail, customFields, o
   const [status, setStatus] = useState<AutoSendStatus>("idle");
   const [txHash, setTxHash] = useState<string | null>(null);
 
+  // Store callbacks in refs to avoid stale closures and dependency churn
+  const onSuccessRef = useRef(onSuccess);
+  onSuccessRef.current = onSuccess;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+
   const { address: walletAddress } = useAccount();
   const publicClient = usePublicClient();
 
@@ -67,7 +73,7 @@ export function useAutoSend({ paymentId, chainId, customerEmail, customFields, o
       amountIn: string // raw amount in smallest units
     ) => {
       if (!walletAddress || !depositAddress || !amountIn) {
-        onError("Missing wallet, deposit address, or amount");
+        onErrorRef.current("Missing wallet, deposit address, or amount");
         return;
       }
 
@@ -124,7 +130,7 @@ export function useAutoSend({ paymentId, chainId, customerEmail, customFields, o
         }
 
         setStatus("success");
-        onSuccess(hash);
+        onSuccessRef.current(hash);
       } catch (err) {
         setStatus("error");
         const message =
@@ -134,10 +140,10 @@ export function useAutoSend({ paymentId, chainId, customerEmail, customFields, o
               : err.message.slice(0, 100)
             : "Transaction failed";
         setTxHash(null);
-        onError(message);
+        onErrorRef.current(message);
       }
     },
-    [walletAddress, sendTransactionAsync, writeContractAsync, paymentId, chainId, customerEmail, customFields, onSuccess, onError]
+    [walletAddress, sendTransactionAsync, writeContractAsync, publicClient, paymentId, chainId, customerEmail, customFields]
   );
 
   const reset = useCallback(() => {

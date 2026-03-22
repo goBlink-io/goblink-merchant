@@ -42,6 +42,18 @@ const Web3Provider = dynamic(
   { ssr: false }
 );
 
+// --- Helpers ---
+
+/** Validate returnUrl to prevent javascript: and open-redirect XSS */
+function safeReturnUrl(url: string | null): string {
+  if (!url) return "#";
+  try {
+    const parsed = new URL(url, window.location.origin);
+    if (parsed.protocol === "https:" || parsed.protocol === "http:") return url;
+  } catch { /* invalid URL */ }
+  return "#";
+}
+
 // --- Types ---
 
 interface PaymentData {
@@ -534,11 +546,13 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
   };
 
   // --- Copy helper ---
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    haptic("tap");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      haptic("tap");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard permission denied */ }
   };
 
   // --- USD equivalent helper ---
@@ -572,6 +586,39 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
     if (data.failureReason) setFailureReason(data.failureReason);
   }, []);
 
+  // Success — fire confetti (hooks must be before all early returns)
+  const confettiFired = useRef(false);
+  useEffect(() => {
+    if (step === "success" && !confettiFired.current) {
+      confettiFired.current = true;
+      haptic("success");
+      const duration = 2000;
+      const end = Date.now() + duration;
+      let rafId: number;
+      const frame = () => {
+        confetti({
+          particleCount: 3,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0, y: 0.7 },
+          colors: ["#10b981", "#3b82f6", "#8b5cf6"],
+        });
+        confetti({
+          particleCount: 3,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1, y: 0.7 },
+          colors: ["#10b981", "#3b82f6", "#8b5cf6"],
+        });
+        if (Date.now() < end) {
+          rafId = requestAnimationFrame(frame);
+        }
+      };
+      frame();
+      return () => cancelAnimationFrame(rafId);
+    }
+  }, [step]);
+
   // --- Render ---
 
   // Expired / Not found
@@ -588,7 +635,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
           </p>
           {payment.returnUrl && (
             <a
-              href={payment.returnUrl}
+              href={safeReturnUrl(payment.returnUrl)}
               className="text-sm text-blue-400 hover:text-blue-300 underline"
             >
               Return to merchant
@@ -598,35 +645,6 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
       </Card>
     );
   }
-
-  // Success — fire confetti on mount
-  const confettiFired = useRef(false);
-  useEffect(() => {
-    if (step === "success" && !confettiFired.current) {
-      confettiFired.current = true;
-      haptic("success");
-      const duration = 2000;
-      const end = Date.now() + duration;
-      const frame = () => {
-        confetti({
-          particleCount: 3,
-          angle: 60,
-          spread: 55,
-          origin: { x: 0, y: 0.7 },
-          colors: ["#10b981", "#3b82f6", "#8b5cf6"],
-        });
-        confetti({
-          particleCount: 3,
-          angle: 120,
-          spread: 55,
-          origin: { x: 1, y: 0.7 },
-          colors: ["#10b981", "#3b82f6", "#8b5cf6"],
-        });
-        if (Date.now() < end) requestAnimationFrame(frame);
-      };
-      frame();
-    }
-  }, [step]);
 
   if (step === "success") {
     return (
@@ -648,7 +666,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
         {payment.returnUrl && (
           <div className="mt-4 text-center">
             <a
-              href={payment.returnUrl}
+              href={safeReturnUrl(payment.returnUrl)}
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-medium hover:brightness-110 transition-all"
             >
               Return to merchant
@@ -699,16 +717,26 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
 
     const { message: failMsg, refundEstimate } = getFailureMessage(failureReason);
 
+    const [retryError, setRetryError] = useState<string | null>(null);
     const handleRetry = async () => {
+      setRetryError(null);
       try {
         const res = await fetch(`/api/checkout/${paymentId}/retry`, { method: "POST" });
-        if (!res.ok) return;
+        if (!res.ok) {
+          setRetryError("Could not create a new payment. Please try again.");
+          return;
+        }
         const data = await res.json();
         if (data?.paymentUrl) {
-          window.location.href = data.paymentUrl;
+          const safe = safeReturnUrl(data.paymentUrl);
+          if (safe !== "#") {
+            window.location.href = safe;
+          } else {
+            setRetryError("Invalid redirect URL received.");
+          }
         }
       } catch {
-        // Silently fail — user can try manually
+        setRetryError("Network error — please check your connection and try again.");
       }
     };
 
@@ -737,9 +765,12 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
                 Try Again
               </button>
             )}
+            {retryError && (
+              <p className="text-sm text-red-400">{retryError}</p>
+            )}
             {payment.returnUrl && (
               <a
-                href={payment.returnUrl}
+                href={safeReturnUrl(payment.returnUrl)}
                 className="w-full px-6 py-2.5 rounded-xl border border-zinc-700 text-zinc-300 text-sm font-medium hover:bg-zinc-800 transition-colors text-center"
               >
                 Return to merchant
@@ -857,7 +888,7 @@ function CheckoutInner({ paymentId, initialData }: CheckoutClientProps) {
       {payment.expiresAt && (
         <div className="flex items-center justify-center gap-1.5 mt-3 text-xs text-zinc-500">
           <Clock className="h-3.5 w-3.5" />
-          <span>Expires in {timeLeft}</span>
+          <span>{timeLeft === "Expired" ? "Expired" : `Expires in ${timeLeft}`}</span>
         </div>
       )}
 
@@ -1375,8 +1406,9 @@ function buildDestAsset(chain: string | null, token: string | null): string | nu
   return `${chain}:mainnet:${token}`;
 }
 
-function toMinorUnits(amount: number, _currency: string): string {
-  const decimals = 6;
+function toMinorUnits(amount: number, currency: string): string {
+  const zeroDecimalCurrencies = ["JPY", "KRW", "VND", "CLP", "ISK"];
+  const decimals = zeroDecimalCurrencies.includes(currency.toUpperCase()) ? 0 : 6;
   return Math.round(amount * 10 ** decimals).toString();
 }
 
